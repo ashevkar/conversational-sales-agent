@@ -38,6 +38,18 @@ NON_ANSWERS = {"yes", "no", "ok", "okay", "sure", "y", "n", "yep", "nope", "k", 
 NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
 
+FOLLOW_UP_PROMPT = """Decide whether the latest message in an analytics chat depends on the earlier conversation.
+
+FOLLOW_UP: it only makes sense together with earlier turns. It refers back to them, changes a filter, period or grouping of the previous question, or asks for the same thing for something else.
+NEW: it is a complete question on its own, or it is not about the data at all (a greeting, a name, random text).
+
+Conversation so far:
+{conversation}
+
+Latest message: {message}
+
+Answer with one word: FOLLOW_UP or NEW."""
+
 REWRITE_PROMPT = """You rewrite the latest message in an analytics chat into ONE standalone question that contains everything needed to answer it on its own: the measure, grouping, filters, time period and top-N from earlier turns.
 
 Rules:
@@ -69,6 +81,7 @@ Write 1-3 short sentences that answer the question.
 - Codes like SP, RJ or MG are Brazilian state codes. Write them exactly as they are; never expand them.
 - If the table is empty, say no matching data was found.
 - If the table is long, mention only the top few rows.
+- If some rows are based on far fewer orders than others, say that their averages are less reliable.
 - Do not talk about data coverage or missing periods."""
 
 
@@ -168,6 +181,15 @@ class Agent:
             out = out.split(":", 1)[1].strip()
         return out or message
 
+    def _is_follow_up(self, message: str) -> bool:
+        """Narrow LLM classification: does this message depend on history?"""
+        convo = "\n".join(f"User: {q}\nAssistant: {r}" for q, r in self.history)
+        prompt = (FOLLOW_UP_PROMPT
+                  .replace("{conversation}", convo)
+                  .replace("{message}", message))
+        out = chat([{"role": "user", "content": prompt}], max_tokens=5)
+        return "FOLLOW" in out.upper()
+
     def _resolve_question(self, message: str) -> str:
         if not self.history:
             return message
@@ -175,9 +197,11 @@ class Agent:
         if prev_r.startswith("CLARIFY"):
             if message.strip().lower().strip(".!") in NON_ANSWERS:
                 return prev_q  # didn't pick an option, so ask again
-            # Merge the answer using only the clarifying exchange, so older
-            # turns can't leak into it.
-            return self._rewrite(message, [(prev_q, prev_r)])
+            # Attach the answer to the original question directly. No LLM
+            # rewrite, so nothing from older turns can leak in.
+            return f"{prev_q} (Clarification: {message.strip()})"
+        if not self._is_follow_up(message):
+            return message  # a new, self-contained question
         return self._rewrite(message, self.history)
 
     def _summarize(self, question: str, sql: str, table: str) -> str:
