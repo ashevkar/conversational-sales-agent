@@ -43,6 +43,11 @@ FOLLOW_UP_PROMPT = """Decide whether the latest message in an analytics chat dep
 FOLLOW_UP: it only makes sense together with earlier turns. It refers back to them, changes a filter, period or grouping of the previous question, or asks for the same thing for something else.
 NEW: it is a complete question on its own, or it is not about the data at all (a greeting, a name, random text).
 
+Previous: Which sellers are best? / Assistant asked: by revenue or by number of orders?
+Latest: by number of orders -> FOLLOW_UP
+Previous: Which sellers are best? / Assistant asked: by revenue or by number of orders?
+Latest: How many orders were canceled in 2017? -> NEW
+
 Conversation so far:
 {conversation}
 
@@ -197,9 +202,11 @@ class Agent:
         if prev_r.startswith("CLARIFY"):
             if message.strip().lower().strip(".!") in NON_ANSWERS:
                 return prev_q  # didn't pick an option, so ask again
-            # Attach the answer to the original question directly. No LLM
-            # rewrite, so nothing from older turns can leak in.
-            return f"{prev_q} (Clarification: {message.strip()})"
+            if self._is_follow_up(message):
+                # Attach the answer to the original question directly. No LLM
+                # rewrite, so nothing from older turns can leak in.
+                return f"{prev_q} (Clarification: {message.strip()})"
+            return message  # user skipped the clarifying question and asked something new
         if not self._is_follow_up(message):
             return message  # a new, self-contained question
         return self._rewrite(message, self.history)

@@ -1,5 +1,0 @@
-# Llama 3.2 3B with a context window large enough for the schema prompt.
-# Ollama's default can be smaller and silently truncates long prompts.
-FROM llama3.2:3b
-PARAMETER num_ctx 8192
-PARAMETER temperature 0
