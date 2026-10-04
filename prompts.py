@@ -9,10 +9,13 @@ teach patterns rather than memorized answers.
 # Which tables/views the model may use, with guidance on when to use each.
 SCHEMA_TABLES = {
     "sales": "One row per order line item, already cleaned (canceled/unavailable "
-             "orders removed, English categories). USE THIS FOR ALMOST EVERYTHING.",
-    "order_reviews": "One review per order (latest). Join to sales on order_id.",
-    "orders": "Raw orders with ALL statuses. Use only for questions about order "
-              "status, cancellations, or delivery times.",
+             "orders removed, English categories). Use for revenue, units, "
+             "categories, products and sellers.",
+    "order_facts": "One row per order, ALL statuses. Use for anything measured per "
+                   "order: order status and cancellations, delivery times, late "
+                   "deliveries, amount paid per order, review scores. delivery_status, "
+                   "is_late and delivery_days are NULL for orders that were not delivered; "
+                   "review_score is NULL for orders without a review.",
     "payments": "One row per payment. Use only for payment type/installment questions.",
 }
 
@@ -27,15 +30,16 @@ DATA COVERAGE
 
 RULES
 1. Revenue = SUM(revenue) from sales. It is item price only (no freight).
-2. Count orders with COUNT(DISTINCT order_id), customers with COUNT(DISTINCT customer_unique_id). Never use COUNT(*) for orders or customers.
+2. Count orders with COUNT(DISTINCT order_id), customers with COUNT(DISTINCT customer_unique_id). Never use COUNT(*) on sales.
 3. "Delivered" orders: is_delivered = true.
 4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'.
-5. Join order_reviews ONLY when the question is about reviews or ratings. The join drops orders without a review, so never add it otherwise.
-6. Review scores by category or seller: first take DISTINCT order_id with that column from sales, then join order_reviews, so multi-item orders are not counted twice.
+5. Per-order questions (status, delivery, late deliveries, amount paid, reviews) use order_facts. Late vs on time: use delivery_status ('late' or 'on_time'; NULL means not delivered), e.g. WHERE delivery_status = 'late'. Exclude canceled orders with NOT is_canceled when summing money.
+6. Per-order values by seller or category: first take DISTINCT order_id plus that column from sales, then join order_facts on order_id, so multi-item orders count once. Count reviewed orders with COUNT(review_score).
 7. Round money and averages with ROUND(x, 2). Order results so the most important rows come first.
 8. Use only the tables and columns listed above. Never invent columns.
 9. If no time period is given, use all available data.
 10. When reporting an average per group (for example review score), always include the number of orders in each group as a column, so small groups can be spotted. Do not filter groups out unless the user asks.
+11. Payment type questions: payments joined to order_facts on order_id, with NOT is_canceled. Never join payments to sales.
 
 HOW TO REPLY - use exactly one of these three formats:
 
@@ -112,11 +116,22 @@ ORDER BY orders_2017 DESC
 User: Average review score by seller state
 SQL:
 ```sql
-SELECT s.seller_state, ROUND(AVG(r.review_score), 2) AS avg_score, COUNT(*) AS orders
+SELECT s.seller_state, ROUND(AVG(f.review_score), 2) AS avg_score,
+       COUNT(f.review_score) AS orders
 FROM (SELECT DISTINCT order_id, seller_state FROM sales) s
-JOIN order_reviews r ON r.order_id = s.order_id
+JOIN order_facts f ON f.order_id = s.order_id
 GROUP BY s.seller_state
 ORDER BY avg_score DESC
+```
+
+User: Average freight per order for delivered orders, by customer state
+SQL:
+```sql
+SELECT customer_state, ROUND(AVG(freight), 2) AS avg_freight, COUNT(*) AS orders
+FROM order_facts
+WHERE is_delivered
+GROUP BY customer_state
+ORDER BY avg_freight DESC
 ```
 
 User: Which products are most popular?

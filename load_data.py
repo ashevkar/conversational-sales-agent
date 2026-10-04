@@ -65,6 +65,69 @@ VIEWS = {
             PARTITION BY order_id ORDER BY review_answer_timestamp DESC
         ) = 1
     """,
+    # One row per order (all statuses) for anything measured per order.
+    # Rules:
+    #  - only joins tables that are one row per order, or pre-aggregated to it,
+    #    so nothing fans out (sellers, categories and payment types are left
+    #    out on purpose: many orders have several of each)
+    #  - is_late compares DATES: the estimate has no time of day, so an order
+    #    delivered on the estimated day is on time. NULL if not delivered.
+    #  - order_revenue = item prices, matching sales.revenue for non-canceled orders
+    #  - review_score is NULL for orders without a review (AVG ignores it)
+    "order_facts": """
+        WITH items AS (
+            SELECT order_id, COUNT(*) AS n_items, SUM(price) AS order_revenue,
+                   SUM(freight_value) AS freight
+            FROM order_items GROUP BY order_id
+        ),
+        pay AS (
+            SELECT order_id, SUM(payment_value) AS payment_total
+            FROM payments GROUP BY order_id
+        )
+        SELECT
+            o.order_id,
+            o.order_status,
+            CAST(o.order_purchase_timestamp AS TIMESTAMP)          AS purchase_ts,
+            year(CAST(o.order_purchase_timestamp AS TIMESTAMP))    AS purchase_year,
+            quarter(CAST(o.order_purchase_timestamp AS TIMESTAMP)) AS purchase_quarter,
+            month(CAST(o.order_purchase_timestamp AS TIMESTAMP))   AS purchase_month,
+            o.order_status = 'delivered'                           AS is_delivered,
+            o.order_status IN ('canceled', 'unavailable')          AS is_canceled,
+            CAST(o.order_approved_at AS TIMESTAMP)                 AS approved_ts,
+            CAST(o.order_delivered_carrier_date AS TIMESTAMP)      AS carrier_ts,
+            CAST(o.order_delivered_customer_date AS TIMESTAMP)     AS delivered_ts,
+            CAST(o.order_estimated_delivery_date AS DATE)          AS estimated_date,
+            CASE WHEN o.order_status = 'delivered'
+                  AND o.order_delivered_customer_date IS NOT NULL
+                 THEN CAST(o.order_delivered_customer_date AS DATE)
+                      > CAST(o.order_estimated_delivery_date AS DATE)
+            END                                                    AS is_late,
+            -- Same rule as a label, so "late vs on time" can't absorb undelivered orders.
+            CASE WHEN o.order_status = 'delivered'
+                  AND o.order_delivered_customer_date IS NOT NULL
+                 THEN CASE WHEN CAST(o.order_delivered_customer_date AS DATE)
+                                > CAST(o.order_estimated_delivery_date AS DATE)
+                           THEN 'late' ELSE 'on_time' END
+            END                                                    AS delivery_status,
+            CASE WHEN o.order_status = 'delivered'
+                 THEN date_diff('day',
+                                CAST(o.order_purchase_timestamp AS DATE),
+                                CAST(o.order_delivered_customer_date AS DATE))
+            END                                                    AS delivery_days,
+            c.customer_unique_id,
+            c.customer_state,
+            c.customer_city,
+            items.n_items,
+            items.order_revenue,
+            items.freight,
+            pay.payment_total,
+            r.review_score
+        FROM orders o
+        JOIN customers c          ON c.customer_id = o.customer_id
+        LEFT JOIN items           ON items.order_id = o.order_id
+        LEFT JOIN pay             ON pay.order_id = o.order_id
+        LEFT JOIN order_reviews r ON r.order_id = o.order_id
+    """,
 }
 
 
@@ -88,6 +151,13 @@ def main():
         con.execute(f"CREATE VIEW {view} AS {sql}")
         rows = con.execute(f"SELECT COUNT(*) FROM {view}").fetchone()[0]
         print(f"view {view:17s} {rows:>8,} rows")
+
+    # order_facts must have exactly one row per order, or per-order sums double count.
+    orders, facts, ids = con.execute(
+        "SELECT (SELECT COUNT(*) FROM orders), COUNT(*), COUNT(DISTINCT order_id) FROM order_facts"
+    ).fetchone()
+    if not orders == facts == ids:
+        raise SystemExit(f"order_facts fan-out: {facts:,} rows, {ids:,} ids, {orders:,} orders")
 
     con.close()
     print(f"\nDatabase written to {DB_PATH}")
