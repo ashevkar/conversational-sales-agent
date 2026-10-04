@@ -2,6 +2,8 @@
 
 Schema and data coverage are read from the database at startup, so the
 prompt adapts if the underlying data changes (e.g. a variant dataset).
+Examples deliberately use different columns than the eval questions, to
+teach patterns rather than memorized answers.
 """
 
 # Which tables/views the model may use, with guidance on when to use each.
@@ -28,9 +30,11 @@ RULES
 2. Count orders with COUNT(DISTINCT order_id), customers with COUNT(DISTINCT customer_unique_id). Never use COUNT(*) for orders or customers.
 3. "Delivered" orders: is_delivered = true.
 4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'.
-5. Review scores by category or seller: first take DISTINCT order_id with that column from sales, then join order_reviews, so multi-item orders are not counted twice.
-6. Round money and averages with ROUND(x, 2). Order results so the most important rows come first.
-7. Use only the tables and columns listed above. Never invent columns.
+5. Join order_reviews ONLY when the question is about reviews or ratings. The join drops orders without a review, so never add it otherwise.
+6. Review scores by category or seller: first take DISTINCT order_id with that column from sales, then join order_reviews, so multi-item orders are not counted twice.
+7. Round money and averages with ROUND(x, 2). Order results so the most important rows come first.
+8. Use only the tables and columns listed above. Never invent columns.
+9. If no time period is given, use all available data.
 
 HOW TO REPLY - use exactly one of these three formats:
 
@@ -40,13 +44,18 @@ SQL:
 ```
 
 CLARIFY: <one short question>
-Use this when the request has several reasonable meanings that would give different answers.
 
 CANNOT: <short reason>
-Use this when the data cannot answer it (for example profit, costs, marketing, customer age or gender, or dates outside the coverage above).
 
-FOLLOW-UP QUESTIONS
-For a follow-up, start from the previous SQL and change only what the user asked for. Keep all earlier filters unless the user removes them.
+WHEN TO CLARIFY
+Reply CLARIFY only when the question ranks things with a vague word like "best", "top", "worst", "biggest" or "most popular" and does not say how to measure it (revenue, number of orders, units sold, or review score). Ask only about the measure. Never ask about the time period. If the measure is stated, do not clarify.
+
+WHEN TO SAY CANNOT
+Reply CANNOT when the data cannot answer it: profit, costs, margins, marketing, inventory, customer age or gender, website traffic, or dates outside the coverage above. Also reply CANNOT if the message is not a question about Olist's sales data.
+
+BREAKDOWNS AND COMPARISONS
+- "Top N X ..., broken down by Y": keep the same top-N X using a subquery, and GROUP BY both X and Y (see example).
+- "Compared side by side" for two periods: one column per period using conditional aggregation (see example). Never add the periods together.
 
 EXAMPLES
 
@@ -58,6 +67,45 @@ FROM sales
 WHERE customer_state = 'RJ' AND purchase_year = 2018
 GROUP BY purchase_month
 ORDER BY purchase_month
+```
+
+User: Top 3 seller states by revenue in 2018
+SQL:
+```sql
+SELECT seller_state, ROUND(SUM(revenue), 2) AS revenue
+FROM sales
+WHERE purchase_year = 2018
+GROUP BY seller_state
+ORDER BY revenue DESC
+LIMIT 3
+```
+
+User: Top 3 seller states by revenue in 2018, broken down by quarter
+SQL:
+```sql
+SELECT seller_state, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
+FROM sales
+WHERE purchase_year = 2018
+  AND seller_state IN (
+      SELECT seller_state FROM sales
+      WHERE purchase_year = 2018
+      GROUP BY seller_state
+      ORDER BY SUM(revenue) DESC
+      LIMIT 3)
+GROUP BY seller_state, purchase_quarter
+ORDER BY seller_state, purchase_quarter
+```
+
+User: Number of orders by seller state, 2017 compared side by side with 2018
+SQL:
+```sql
+SELECT seller_state,
+       COUNT(DISTINCT CASE WHEN purchase_year = 2017 THEN order_id END) AS orders_2017,
+       COUNT(DISTINCT CASE WHEN purchase_year = 2018 THEN order_id END) AS orders_2018
+FROM sales
+WHERE purchase_year IN (2017, 2018)
+GROUP BY seller_state
+ORDER BY orders_2017 DESC
 ```
 
 User: Average review score by seller state
@@ -88,19 +136,27 @@ def describe_schema(con) -> str:
 
 
 def describe_coverage(con) -> str:
-    lo, hi = con.execute(
-        "SELECT MIN(purchase_ts)::DATE, MAX(purchase_ts)::DATE FROM sales"
-    ).fetchone()
-    rows = con.execute(
+    years = con.execute(
+        """SELECT purchase_year, MIN(purchase_ts)::DATE, MAX(purchase_ts)::DATE,
+                  COUNT(DISTINCT order_id)
+           FROM sales GROUP BY 1 ORDER BY 1"""
+    ).fetchall()
+    lines = []
+    for year, first, last, n in years:
+        full = first.month == 1 and first.day <= 7 and last.month == 12 and last.day >= 24
+        tag = "" if full else " (PARTIAL YEAR)"
+        lines.append(f"- {year}: {n:,} orders, from {first} to {last}{tag}")
+
+    quarters = con.execute(
         """SELECT purchase_year, purchase_quarter, COUNT(DISTINCT order_id)
            FROM sales GROUP BY 1, 2 ORDER BY 1, 2"""
     ).fetchall()
-    per_q = ", ".join(f"{y}-Q{q}: {n:,}" for y, q, n in rows)
+    per_q = ", ".join(f"{y}-Q{q}: {n:,}" for y, q, n in quarters)
+
     return (
-        f"Orders from {lo} to {hi}.\n"
-        f"Orders per quarter: {per_q}.\n"
-        "Quarters with very few orders are incomplete. When comparing periods, "
-        "mention if one of them is incomplete."
+        "\n".join(lines)
+        + f"\nOrders per quarter: {per_q}."
+        + "\nWhen comparing periods, say if one of them is a partial year or has very few orders."
     )
 
 

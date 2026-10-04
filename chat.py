@@ -29,6 +29,8 @@ def main():
         start = time.time()
         reply = agent.ask(q)
 
+        if reply.question and reply.question != q:
+            print(f"\n(Interpreted as: {reply.question})")
         print(f"\nAgent: {reply.text}")
         if reply.table:
             print("\n" + reply.table)
