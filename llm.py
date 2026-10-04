@@ -1,4 +1,4 @@
-"""Thin client for the local model (LM Studio's OpenAI-compatible server).
+"""Thin client for the local model (Ollama's OpenAI-compatible server).
 
 Works with any OpenAI-compatible local server (LM Studio, Ollama, llama.cpp,
 vLLM) by changing LLM_BASE_URL / LLM_MODEL. No hosted APIs are used.
@@ -7,8 +7,8 @@ import os
 
 from openai import OpenAI
 
-BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:1234/v1")
-MODEL = os.getenv("LLM_MODEL", "qwen3.5-4b")
+BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")  # Ollama
+MODEL = os.getenv("LLM_MODEL", "qwen3.5-4b-8k")  # built from ./Modelfile
 
 _client = OpenAI(base_url=BASE_URL, api_key="local")  # key is ignored locally
 

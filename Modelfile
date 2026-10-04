@@ -1,0 +1,5 @@
+# Qwen 3.5 4B for the analytics agent.
+# num_ctx: Ollama's default context can silently truncate long prompts.
+FROM qwen3.5:4b
+PARAMETER num_ctx 8192
+PARAMETER temperature 0
