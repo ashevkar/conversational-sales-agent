@@ -20,7 +20,10 @@ class QueryError(Exception):
 
 
 def connect():
-    return duckdb.connect(DB_PATH, read_only=True)
+    # enable_external_access=False blocks reading any file other than the
+    # database itself (read_text, glob, SELECT * FROM 'file.csv', ...).
+    return duckdb.connect(DB_PATH, read_only=True,
+                          config={"enable_external_access": False})
 
 
 def run_sql(con, sql: str) -> dict:
