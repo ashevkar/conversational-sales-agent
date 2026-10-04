@@ -72,7 +72,9 @@ VIEWS = {
     #    out on purpose: many orders have several of each)
     #  - is_late compares DATES: the estimate has no time of day, so an order
     #    delivered on the estimated day is on time. NULL if not delivered.
-    #  - order_revenue = item prices, matching sales.revenue for non-canceled orders
+    #  - is_canceled is the 'canceled' status only; is_sale excludes canceled and
+    #    unavailable orders, matching the sales view (use it for money questions)
+    #  - order_revenue = item prices, matching sales.revenue when is_sale
     #  - review_score is NULL for orders without a review (AVG ignores it)
     "order_facts": """
         WITH items AS (
@@ -92,7 +94,9 @@ VIEWS = {
             quarter(CAST(o.order_purchase_timestamp AS TIMESTAMP)) AS purchase_quarter,
             month(CAST(o.order_purchase_timestamp AS TIMESTAMP))   AS purchase_month,
             o.order_status = 'delivered'                           AS is_delivered,
-            o.order_status IN ('canceled', 'unavailable')          AS is_canceled,
+            o.order_status = 'canceled'                            AS is_canceled,
+            -- Same rule as the sales view: canceled/unavailable orders are not sales.
+            o.order_status NOT IN ('canceled', 'unavailable')      AS is_sale,
             CAST(o.order_approved_at AS TIMESTAMP)                 AS approved_ts,
             CAST(o.order_delivered_carrier_date AS TIMESTAMP)      AS carrier_ts,
             CAST(o.order_delivered_customer_date AS TIMESTAMP)     AS delivered_ts,

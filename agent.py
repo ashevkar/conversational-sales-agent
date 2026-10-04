@@ -11,14 +11,17 @@ Per turn:
      repeated clarifications; errors are fed back up to MAX_SQL_ATTEMPTS.
   4. Summarize: 1-3 sentences from the result table. Every number in the
      summary must appear in the table, SQL or question, or it is rejected.
-     Partial-year caveats are added by code, not by the model.
+     Partial-year caveats are added by code, not by the model, and so are
+     notes saying how a relative period or a place name was interpreted.
 """
+import calendar
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from db import QueryError, connect, format_table, run_sql
 from llm import chat
-from prompts import build_system_prompt
+from prompts import build_system_prompt, relative_periods
 
 MAX_SQL_ATTEMPTS = 3
 HISTORY_TURNS = 6  # question/reply pairs kept for the rewrite step
@@ -37,6 +40,11 @@ NON_ANSWERS = {"yes", "no", "ok", "okay", "sure", "y", "n", "yep", "nope", "k", 
 
 NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+RELATIVE = re.compile(r"\b(?:last|previous|past)\s+(quarter|month|year)\b", re.IGNORECASE)
+
+# Brazilian states that share their name with their capital city. The prompt
+# reads these as the state; the answer says so (key: accent-free, lowercase).
+SAME_NAME_STATES = {"sao paulo": ("São Paulo", "SP"), "rio de janeiro": ("Rio de Janeiro", "RJ")}
 
 FOLLOW_UP_PROMPT = """Decide whether the latest message in an analytics chat depends on the earlier conversation.
 
@@ -173,6 +181,18 @@ class Agent:
             if not (first.month == 1 and first.day <= 7 and last.month == 12 and last.day >= 24):
                 self.partial_years[year] = f"{year} is a partial year (data from {first} to {last})"
 
+        # How relative periods were resolved (from the data's latest date), as
+        # (year that must appear in the SQL, note sentence).
+        rel = relative_periods(self.con)
+        (qy, qn), (my, mn), ly = rel["last_quarter"], rel["last_month"], rel["last_year"]
+        self.relative_notes = {
+            "quarter": (qy, f"'last quarter' = Q{qn} {qy}, the last complete quarter in the "
+                            f"data (latest date {rel['latest']})"),
+            "month": (my, f"'last month' = {calendar.month_name[mn]} {my}, the last complete "
+                          "month in the data"),
+            "year": (ly, f"'last year' = {ly}, the last complete year in the data"),
+        }
+
     def reset(self):
         self.history = []
 
@@ -223,6 +243,20 @@ class Agent:
             return message  # a new, self-contained question
         return self._rewrite(message, last)
 
+    def _interpretation_notes(self, question: str, sql: str) -> list[str]:
+        """Say how relative periods and state/city names were read, when the SQL used them."""
+        notes = []
+        for unit in dict.fromkeys(m.group(1).lower() for m in RELATIVE.finditer(question)):
+            year, note = self.relative_notes[unit]
+            if str(year) in sql:
+                notes.append(note)
+        plain = unicodedata.normalize("NFKD", question).encode("ascii", "ignore").decode().lower()
+        for key, (name, code) in SAME_NAME_STATES.items():
+            if key in plain and "city" not in plain and f"'{code}'" in sql:
+                notes.append(f"{name} is read as the state ({code}); ask about "
+                             f"{name} city for the city only")
+        return notes
+
     def _summarize(self, question: str, sql: str, table: str) -> str:
         prompt = SUMMARY_PROMPT.replace("{question}", question).replace("{table}", table)
         text = chat([{"role": "user", "content": prompt}], max_tokens=300)
@@ -237,7 +271,8 @@ class Agent:
                 text = "Here are the results (see the table below)."
 
         years_used = {int(y) for y in YEAR.findall(sql)}
-        notes = [self.partial_years[y] for y in sorted(years_used) if y in self.partial_years]
+        notes = self._interpretation_notes(question, sql)
+        notes += [self.partial_years[y] for y in sorted(years_used) if y in self.partial_years]
         if notes:
             text += "\nNote: " + "; ".join(notes) + "."
         return text

@@ -5,6 +5,8 @@ prompt adapts if the underlying data changes (e.g. a variant dataset).
 Examples deliberately use different columns than the eval questions, to
 teach patterns rather than memorized answers.
 """
+import calendar
+from datetime import date
 
 # Which tables/views the model may use, with guidance on when to use each.
 SCHEMA_TABLES = {
@@ -13,11 +15,22 @@ SCHEMA_TABLES = {
              "categories, products and sellers.",
     "order_facts": "One row per order, ALL statuses. Use for anything measured per "
                    "order: order status and cancellations, delivery times, late "
-                   "deliveries, amount paid per order, review scores. delivery_status, "
-                   "is_late and delivery_days are NULL for orders that were not delivered; "
-                   "review_score is NULL for orders without a review.",
+                   "deliveries, amount paid per order, review scores. is_canceled = "
+                   "status 'canceled'; is_sale = counts as a sale (not canceled or "
+                   "unavailable). delivery_status, is_late and delivery_days are NULL "
+                   "for orders that were not delivered; review_score is NULL for orders "
+                   "without a review.",
     "payments": "One row per payment. Use only for payment type/installment questions.",
 }
+
+# Columns that stay in the views but are not shown to the model, to keep the
+# prompt short for a small model. Rarely needed; add back if questions need them.
+HIDDEN_COLUMNS = {
+    "sales": {"order_item_id"},
+    "order_facts": {"approved_ts", "carrier_ts", "estimated_date", "customer_city"},
+    "payments": {"payment_sequential"},
+}
+
 
 TEMPLATE = """You are a data analyst for Olist, a Brazilian e-commerce marketplace.
 You answer questions by writing one DuckDB SQL query against this database.
@@ -32,14 +45,14 @@ RULES
 1. Revenue = SUM(revenue) from sales. It is item price only (no freight).
 2. Count orders with COUNT(DISTINCT order_id), customers with COUNT(DISTINCT customer_unique_id). Never use COUNT(*) on sales.
 3. "Delivered" orders: is_delivered = true.
-4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'.
-5. Per-order questions (status, delivery, late deliveries, amount paid, reviews) use order_facts. Late vs on time: use delivery_status ('late' or 'on_time'; NULL means not delivered), e.g. WHERE delivery_status = 'late'. Exclude canceled orders with NOT is_canceled when summing money.
+4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'. A place name like São Paulo or Rio de Janeiro means the STATE (customer_state) unless the user says "city". "How did <place> do" means sales to customers there: revenue and number of orders.
+5. Per-order questions (status, delivery, late deliveries, amount paid, reviews) use order_facts. Late vs on time: use delivery_status ('late' or 'on_time'; NULL means not delivered), e.g. WHERE delivery_status = 'late'. When summing money from order_facts, keep only sales: WHERE is_sale.
 6. Per-order values by seller or category: first take DISTINCT order_id plus that column from sales, then join order_facts on order_id, so multi-item orders count once. Count reviewed orders with COUNT(review_score).
 7. Round money and averages with ROUND(x, 2). Order results so the most important rows come first.
 8. Use only the tables and columns listed above. Never invent columns.
-9. If no time period is given, use all available data.
+9. If no time period is given, use all available data. Relative periods ("last quarter", "last year", "last month") mean the periods listed under DATA COVERAGE, never today's date.
 10. When reporting an average per group (for example review score), always include the number of orders in each group as a column, so small groups can be spotted. Do not filter groups out unless the user asks.
-11. Payment type questions: payments joined to order_facts on order_id, with NOT is_canceled. Never join payments to sales.
+11. Payment type questions: payments joined to order_facts on order_id, with WHERE is_sale. Never join payments to sales.
 
 HOW TO REPLY - use exactly one of these three formats:
 
@@ -72,17 +85,6 @@ FROM sales
 WHERE customer_state = 'RJ' AND purchase_year = 2018
 GROUP BY purchase_month
 ORDER BY purchase_month
-```
-
-User: Top 3 seller states by revenue in 2018
-SQL:
-```sql
-SELECT seller_state, ROUND(SUM(revenue), 2) AS revenue
-FROM sales
-WHERE purchase_year = 2018
-GROUP BY seller_state
-ORDER BY revenue DESC
-LIMIT 3
 ```
 
 User: Top 3 seller states by revenue in 2018, broken down by quarter
@@ -146,9 +148,37 @@ def describe_schema(con) -> str:
     parts = []
     for table, note in SCHEMA_TABLES.items():
         cols = con.execute(f"DESCRIBE {table}").fetchall()
-        col_text = ", ".join(f"{c[0]} ({c[1]})" for c in cols)
+        hidden = HIDDEN_COLUMNS.get(table, set())
+        col_text = ", ".join(f"{c[0]} ({c[1]})" for c in cols if c[0] not in hidden)
         parts.append(f"- {table}: {note}\n  columns: {col_text}")
     return "\n".join(parts)
+
+
+def relative_periods(con) -> dict:
+    """Relative periods measured from the latest date in the data, not today.
+
+    A quarter, month or year counts as complete when the data reaches its last
+    7 days (the same tolerance used for full years). Derived from the data, so
+    it stays correct on a dataset with a different date range.
+    """
+    latest = con.execute("SELECT MAX(purchase_ts)::DATE FROM sales").fetchone()[0]
+
+    def complete(end: date) -> bool:
+        return (end - latest).days <= 7
+
+    y, m = latest.year, latest.month
+    q = (m - 1) // 3 + 1
+    q_end = date(y, 3 * q, calendar.monthrange(y, 3 * q)[1])
+    if complete(q_end):
+        last_q = (y, q)
+    else:
+        last_q = (y, q - 1) if q > 1 else (y - 1, 4)
+    if complete(date(y, m, calendar.monthrange(y, m)[1])):
+        last_m = (y, m)
+    else:
+        last_m = (y, m - 1) if m > 1 else (y - 1, 12)
+    last_y = y if complete(date(y, 12, 31)) else y - 1
+    return {"latest": latest, "last_quarter": last_q, "last_month": last_m, "last_year": last_y}
 
 
 def describe_coverage(con) -> str:
@@ -167,11 +197,27 @@ def describe_coverage(con) -> str:
         """SELECT purchase_year, purchase_quarter, COUNT(DISTINCT order_id)
            FROM sales GROUP BY 1, 2 ORDER BY 1, 2"""
     ).fetchall()
-    per_q = ", ".join(f"{y}-Q{q}: {n:,}" for y, q, n in quarters)
+    # Only flag sparse quarters (under 10% of the median); listing every quarter
+    # cost ~140 prompt tokens for no extra accuracy.
+    counts = sorted(n for _, _, n in quarters)
+    median = counts[len(counts) // 2]
+    sparse = [f"{y}-Q{q} ({n:,} orders)" for y, q, n in quarters if n < 0.1 * median]
+
+    rel = relative_periods(con)
+    (qy, qn), (my, mn) = rel["last_quarter"], rel["last_month"]
+    relative = (
+        f"\nLatest date in the data: {rel['latest']}. Relative periods are measured from it, "
+        "not from today:"
+        f'\n- "last quarter" = {qy} Q{qn} (purchase_year = {qy} AND purchase_quarter = {qn}), '
+        "the last complete quarter"
+        f'\n- "last month" = {my}-{mn:02d} (purchase_year = {my} AND purchase_month = {mn})'
+        f'\n- "last year" = {rel["last_year"]}, the last complete year'
+    )
 
     return (
         "\n".join(lines)
-        + f"\nOrders per quarter: {per_q}."
+        + (f"\nQuarters with very few orders: {', '.join(sparse)}." if sparse else "")
+        + relative
         + "\nWhen comparing periods, say if one of them is a partial year or has very few orders."
     )
 

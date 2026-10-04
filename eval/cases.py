@@ -76,11 +76,12 @@ CASES = [
     {
         "name": "Sao Paulo last quarter",
         "category": "grounding",
-        # DECISION PENDING: assumes "São Paulo" = the state (SP) and "last quarter"
-        # = the last complete quarter in the data (2018 Q2; Q3 stops on Sep 3).
-        # Revenue or order count accepted.
+        # Decisions: "São Paulo" = the state (SP) unless "city" is said; "last
+        # quarter" = the last complete quarter in the data (2018 Q2; Q3 stops on
+        # Sep 3). Revenue or order count accepted; the answer must name the quarter.
         "turns": ["How did São Paulo do last quarter?"],
-        "checks": [{"type": "table_has", "items": ["1,173,308.82|8984|8,984"]}],
+        "checks": [{"type": "table_has", "items": ["1,173,308.82|8984|8,984"]},
+                   {"type": "text_has", "items": ["Q2 2018"]}],
     },
     {
         "name": "no 2018 note on a 2017 question",
