@@ -1,28 +1,82 @@
-"""Conversational analytics agent: question -> SQL -> run -> answer.
+"""Conversational analytics agent.
 
-Each turn the model must reply with SQL, CLARIFY, or CANNOT. SQL is run
-read-only; failures are fed back to the model for up to MAX_SQL_ATTEMPTS.
-Conversation memory stores each past question with the SQL that answered it,
-so follow-ups can modify the previous query instead of starting over.
+Per turn:
+  1. Resolve: turn the latest message into one standalone question.
+     - After a clarifying question, a bare "yes/ok" re-asks it (no LLM call),
+       and a real answer is merged using ONLY the clarifying exchange.
+     - Otherwise an LLM rewrite carries over filters, periods and groupings.
+  2. Generate: the model answers the standalone question with SQL, CLARIFY,
+     or CANNOT. SQL generation is stateless (no chat history).
+  3. Validate + run: guardrails reject raw tables, duplicate-row results and
+     repeated clarifications; errors are fed back up to MAX_SQL_ATTEMPTS.
+  4. Summarize: 1-3 sentences from the result table. Every number in the
+     summary must appear in the table, SQL or question, or it is rejected.
+     Partial-year caveats are added by code, not by the model.
 """
 import re
 from dataclasses import dataclass
 
 from db import QueryError, connect, format_table, run_sql
 from llm import chat
-from prompts import build_system_prompt, describe_coverage
+from prompts import build_system_prompt
 
 MAX_SQL_ATTEMPTS = 3
-HISTORY_TURNS = 4  # keep the last N question/answer pairs
+HISTORY_TURNS = 6  # question/reply pairs kept for the rewrite step
 
 SQL_BLOCK = re.compile(r"```(?:sql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 TAGGED = re.compile(r"^\s*(CLARIFY|CANNOT)\s*:\s*(.+)", re.DOTALL | re.IGNORECASE | re.MULTILINE)
+
+# Raw tables that the cleaned views replace. Querying them bypasses the
+# data-quality rules (e.g. joining customers on customer_unique_id fans out).
+RAW_TABLES = {"customers", "products", "sellers", "order_items",
+              "category_translation", "reviews"}
+TABLE_REF = re.compile(r"\b(?:from|join)\s+([a-z_][a-z0-9_]*)", re.IGNORECASE)
+
+# Replies to a clarifying question that don't actually pick an option.
+NON_ANSWERS = {"yes", "no", "ok", "okay", "sure", "y", "n", "yep", "nope", "k", "fine"}
+
+NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+
+REWRITE_PROMPT = """You rewrite the latest message in an analytics chat into ONE standalone question that contains everything needed to answer it on its own: the measure, grouping, filters, time period and top-N from earlier turns.
+
+Rules:
+- Carry over earlier filters, groupings and time periods unless the user changes or removes them.
+- "Break that down by X" means: the previous question, broken down by X.
+- "Only count ..." means: add that filter to the previous question.
+- "Compare with <period>" means: the previous question with the earlier period and the new period compared side by side. Use the words "compared side by side".
+- If the assistant just asked a clarifying question and the user picked an option, merge their choice into that question.
+- If the latest message is a new, unrelated question, return it unchanged.
+- If the latest message is not a question or request about the data (a name, a greeting, random text), return it unchanged.
+- Output only the rewritten question. No explanation, no quotes.
+
+Conversation so far:
+{conversation}
+
+Latest message: {message}
+
+Standalone question:"""
+
+SUMMARY_PROMPT = """You explain a database query result to a business user.
+
+Question: {question}
+
+Result table:
+{table}
+
+Write 1-3 short sentences that answer the question.
+- Quote numbers exactly as they appear in the table. Do not add, subtract, total, average or compute percentages yourself.
+- Codes like SP, RJ or MG are Brazilian state codes. Write them exactly as they are; never expand them.
+- If the table is empty, say no matching data was found.
+- If the table is long, mention only the top few rows.
+- Do not talk about data coverage or missing periods."""
 
 
 @dataclass
 class Reply:
     kind: str                # "answer" | "clarify" | "cannot" | "error"
     text: str
+    question: str = ""       # the standalone question that was actually answered
     sql: str | None = None
     table: str | None = None
     attempts: int = 0
@@ -39,41 +93,121 @@ def parse(raw: str) -> tuple[str, str]:
     stripped = raw.strip()
     if stripped.upper().startswith("SQL:"):
         stripped = stripped[4:].strip()
-    if stripped.split(None, 1)[:1] and stripped.split(None, 1)[0].lower() in ("select", "with"):
+    first = stripped.split(None, 1)[:1]
+    if first and first[0].lower() in ("select", "with"):
         return "sql", stripped
     return "none", raw
+
+
+def check_sql(sql: str) -> str:
+    """Return an error message if the SQL breaks a guardrail, else ''."""
+    used = {t.lower() for t in TABLE_REF.findall(sql)}
+    raw = sorted(used & RAW_TABLES)
+    if raw:
+        return (f"Do not use the raw table(s) {', '.join(raw)}. Use the sales view "
+                "(it already has customer, seller and category columns) or order_reviews.")
+    return ""
+
+
+def _numbers(text: str) -> set[float]:
+    out = set()
+    for m in NUMBER.findall(text):
+        try:
+            out.add(round(abs(float(m.replace(",", ""))), 2))
+        except ValueError:
+            pass
+    return out
+
+
+def untraceable_numbers(summary: str, *sources: str) -> list[float]:
+    """Numbers in the summary that don't appear in any source text.
+
+    Small integers (ranks, counts like 'top 5') and years are allowed.
+    """
+    allowed = set().union(*(_numbers(s) for s in sources))
+    bad = []
+    for n in _numbers(summary):
+        if n in allowed:
+            continue
+        if n.is_integer() and (n <= 20 or 1900 <= n <= 2100):
+            continue
+        bad.append(n)
+    return bad
 
 
 class Agent:
     def __init__(self):
         self.con = connect()
         self.system = build_system_prompt(self.con)
-        self.coverage = describe_coverage(self.con)
-        self.history: list[dict] = []
+        self.history: list[tuple[str, str]] = []  # (standalone question, short reply)
+
+        # Years that don't cover Jan-Dec, with a fixed caveat sentence.
+        self.partial_years = {}
+        for year, first, last in self.con.execute(
+            "SELECT purchase_year, MIN(purchase_ts)::DATE, MAX(purchase_ts)::DATE "
+            "FROM sales GROUP BY 1"
+        ).fetchall():
+            if not (first.month == 1 and first.day <= 7 and last.month == 12 and last.day >= 24):
+                self.partial_years[year] = f"{year} is a partial year (data from {first} to {last})"
 
     def reset(self):
         self.history = []
 
-    def _remember(self, question: str, answer: str):
-        self.history += [{"role": "user", "content": question},
-                         {"role": "assistant", "content": answer}]
-        self.history = self.history[-2 * HISTORY_TURNS:]
+    def _remember(self, question: str, reply: str):
+        self.history.append((question, reply))
+        self.history = self.history[-HISTORY_TURNS:]
+
+    def _rewrite(self, message: str, history: list[tuple[str, str]]) -> str:
+        convo = "\n".join(f"User: {q}\nAssistant: {r}" for q, r in history)
+        prompt = (REWRITE_PROMPT
+                  .replace("{conversation}", convo)
+                  .replace("{message}", message))
+        out = chat([{"role": "user", "content": prompt}], max_tokens=200)
+        out = out.strip().strip('"').strip()
+        if out.lower().startswith("standalone question:"):
+            out = out.split(":", 1)[1].strip()
+        return out or message
+
+    def _resolve_question(self, message: str) -> str:
+        if not self.history:
+            return message
+        prev_q, prev_r = self.history[-1]
+        if prev_r.startswith("CLARIFY"):
+            if message.strip().lower().strip(".!") in NON_ANSWERS:
+                return prev_q  # didn't pick an option, so ask again
+            # Merge the answer using only the clarifying exchange, so older
+            # turns can't leak into it.
+            return self._rewrite(message, [(prev_q, prev_r)])
+        return self._rewrite(message, self.history)
 
     def _summarize(self, question: str, sql: str, table: str) -> str:
-        prompt = (
-            "You explain database query results to a business user.\n\n"
-            f"Question: {question}\n\nSQL that was run:\n{sql}\n\n"
-            f"Result:\n{table}\n\nData coverage:\n{self.coverage}\n\n"
-            "Write a short answer (1-3 sentences) using ONLY numbers that appear "
-            "in the result. Do not invent or estimate numbers. If the result is "
-            "empty, say no matching data was found. If the question compares "
-            "periods and one of them is incomplete according to the coverage, say so."
-        )
-        return chat([{"role": "user", "content": prompt}], max_tokens=300)
+        prompt = SUMMARY_PROMPT.replace("{question}", question).replace("{table}", table)
+        text = chat([{"role": "user", "content": prompt}], max_tokens=300)
 
-    def ask(self, question: str) -> Reply:
+        bad = untraceable_numbers(text, table, sql, question)
+        if bad:
+            retry = (prompt + "\n\nYour previous answer used numbers that are not in the "
+                     f"table: {', '.join(f'{b:,.2f}' for b in bad)}. Rewrite it using only "
+                     "numbers copied from the table.")
+            text = chat([{"role": "user", "content": retry}], max_tokens=300)
+            if untraceable_numbers(text, table, sql, question):
+                text = "Here are the results (see the table below)."
+
+        years_used = {int(y) for y in YEAR.findall(sql)}
+        notes = [self.partial_years[y] for y in sorted(years_used) if y in self.partial_years]
+        if notes:
+            text += "\nNote: " + "; ".join(notes) + "."
+        return text
+
+    def ask(self, message: str) -> Reply:
+        question = self._resolve_question(message)
+
+        # At most one clarifying question per request: if we just asked one and
+        # the user's answer changed the question, the model must answer now.
+        prev_q, prev_r = self.history[-1] if self.history else ("", "")
+        no_more_clarify = prev_r.startswith("CLARIFY") and question != prev_q
+
         messages = [{"role": "system", "content": self.system},
-                    *self.history,
                     {"role": "user", "content": question}]
         last_error = ""
 
@@ -81,24 +215,33 @@ class Agent:
             raw = chat(messages)
             kind, payload = parse(raw)
 
-            if kind in ("clarify", "cannot"):
-                self._remember(question, raw)
-                return Reply(kind, payload, attempts=attempt)
-
-            if kind == "none":
+            if kind == "clarify" and no_more_clarify:
+                last_error = ("The user already answered a clarifying question. Do not ask "
+                              "another one. Reply with SQL, using all available data for "
+                              "anything not specified.")
+            elif kind in ("clarify", "cannot"):
+                self._remember(question, f"{kind.upper()}: {payload}")
+                return Reply(kind, payload, question=question, attempts=attempt)
+            elif kind == "none":
                 last_error = "Your reply was not in the SQL / CLARIFY / CANNOT format."
-            else:
-                try:
-                    result = run_sql(self.con, payload)
-                except QueryError as e:
-                    last_error = str(e)[:500]
-                else:
-                    table = format_table(result)
-                    text = self._summarize(question, result["sql"], table)
-                    self._remember(question,
-                                   f"SQL:\n```sql\n{result['sql']}\n```\nAnswer: {text}")
-                    return Reply("answer", text, sql=result["sql"], table=table,
-                                 attempts=attempt)
+            else:  # sql
+                last_error = check_sql(payload)
+                if not last_error:
+                    try:
+                        result = run_sql(self.con, payload)
+                    except QueryError as e:
+                        last_error = str(e)[:500]
+                    else:
+                        rows = result["rows"]
+                        if len({repr(r) for r in rows}) < len(rows):
+                            last_error = ("The result has duplicate rows, which usually "
+                                          "means an unnecessary join. Remove it.")
+                        else:
+                            table = format_table(result)
+                            text = self._summarize(question, result["sql"], table)
+                            self._remember(question, "Answered.")
+                            return Reply("answer", text, question=question,
+                                         sql=result["sql"], table=table, attempts=attempt)
 
             messages += [
                 {"role": "assistant", "content": raw},
@@ -106,7 +249,8 @@ class Agent:
                                             "Fix it and reply again in the required format."},
             ]
 
+        self._remember(question, "Could not answer.")
         return Reply("error",
                      "Sorry, I couldn't build a working query for that, so I won't guess. "
                      f"Last error: {last_error}",
-                     attempts=MAX_SQL_ATTEMPTS)
+                     question=question, attempts=MAX_SQL_ATTEMPTS)
