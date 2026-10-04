@@ -123,7 +123,12 @@ def check_sql(sql: str) -> str:
     raw = sorted(used & RAW_TABLES)
     if raw:
         return (f"Do not use the raw table(s) {', '.join(raw)}. Use the sales view "
-                "(it already has customer, seller and category columns) or order_reviews.")
+                "(it already has customer, seller and category columns) or order_facts "
+                "(one row per order, with delivery, payment and review columns).")
+    if "sales" in used and "payments" in used:
+        return ("Do not join sales with payments: an order with several items and several "
+                "payments multiplies rows and inflates totals. For payment questions use "
+                "payments joined to order_facts (for dates and status) only.")
     return ""
 
 
@@ -186,9 +191,9 @@ class Agent:
             out = out.split(":", 1)[1].strip()
         return out or message
 
-    def _is_follow_up(self, message: str) -> bool:
+    def _is_follow_up(self, message: str, history: list[tuple[str, str]]) -> bool:
         """Narrow LLM classification: does this message depend on history?"""
-        convo = "\n".join(f"User: {q}\nAssistant: {r}" for q, r in self.history)
+        convo = "\n".join(f"User: {q}\nAssistant: {r}" for q, r in history)
         prompt = (FOLLOW_UP_PROMPT
                   .replace("{conversation}", convo)
                   .replace("{message}", message))
@@ -202,14 +207,21 @@ class Agent:
         if prev_r.startswith("CLARIFY"):
             if message.strip().lower().strip(".!") in NON_ANSWERS:
                 return prev_q  # didn't pick an option, so ask again
-            if self._is_follow_up(message):
+            if self._is_follow_up(message, [(prev_q, prev_r)]):
                 # Attach the answer to the original question directly. No LLM
                 # rewrite, so nothing from older turns can leak in.
                 return f"{prev_q} (Clarification: {message.strip()})"
             return message  # user skipped the clarifying question and asked something new
-        if not self._is_follow_up(message):
+        # Only an answered question can be followed up. Answered questions are
+        # stored in standalone form, so the latest one carries the whole
+        # conversation state; older turns aren't shown, so they can't leak in.
+        answered = [(q, r) for q, r in self.history if r == "Answered."]
+        if not answered:
+            return message
+        last = answered[-1:]
+        if not self._is_follow_up(message, last):
             return message  # a new, self-contained question
-        return self._rewrite(message, self.history)
+        return self._rewrite(message, last)
 
     def _summarize(self, question: str, sql: str, table: str) -> str:
         prompt = SUMMARY_PROMPT.replace("{question}", question).replace("{table}", table)
