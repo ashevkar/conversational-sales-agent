@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conversational Sales Analytics Agent</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%232b59dc%22%3E%3Cpath%20d%3D%22M9%2C15a1%2C1%2C0%2C1%2C0%2C1%2C1A1%2C1%2C0%2C0%2C0%2C9%2C15ZM2%2C14a1%2C1%2C0%2C0%2C0-1%2C1v2a1%2C1%2C0%2C0%2C0%2C2%2C0V15A1%2C1%2C0%2C0%2C0%2C2%2C14Zm20%2C0a1%2C1%2C0%2C0%2C0-1%2C1v2a1%2C1%2C0%2C0%2C0%2C2%2C0V15A1%2C1%2C0%2C0%2C0%2C22%2C14ZM17%2C7H13V5.72A2%2C2%2C0%2C0%2C0%2C14%2C4a2%2C2%2C0%2C0%2C0-4%2C0%2C2%2C2%2C0%2C0%2C0%2C1%2C1.72V7H7a3%2C3%2C0%2C0%2C0-3%2C3v9a3%2C3%2C0%2C0%2C0%2C3%2C3H17a3%2C3%2C0%2C0%2C0%2C3-3V10A3%2C3%2C0%2C0%2C0%2C17%2C7ZM13.72%2C9l-.5%2C2H10.78l-.5-2ZM18%2C19a1%2C1%2C0%2C0%2C1-1%2C1H7a1%2C1%2C0%2C0%2C1-1-1V10A1%2C1%2C0%2C0%2C1%2C7%2C9H8.22L9%2C12.24A1%2C1%2C0%2C0%2C0%2C10%2C13h4a1%2C1%2C0%2C0%2C0%2C1-.76L15.78%2C9H17a1%2C1%2C0%2C0%2C1%2C1%2C1Zm-3-4a1%2C1%2C0%2C1%2C0%2C1%2C1A1%2C1%2C0%2C0%2C0%2C15%2C15Z%22/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <!-- GSAP is vendored locally so the app works fully offline. -->
+  <script src="/vendor/gsap.min.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Conversations">
+      <div class="brand">
+        <div class="brand-mark" data-icon="robot"></div>
+        <div>
+          <div class="brand-name">Sales Analytics AI</div>
+          <div class="brand-sub">Conversational insights</div>
+        </div>
+      </div>
+
+      <button id="new-chat" class="new-chat" type="button">
+        <span data-icon="plus"></span>New conversation
+      </button>
+
+      <div class="section-label">Recent</div>
+      <div id="history" class="history"></div>
+      <p id="history-empty" class="history-empty">Your conversations will appear here. They are saved in this browser only.</p>
+
+      <div class="sidebar-spacer"></div>
+      <div id="status" class="status">
+        <div class="status-row"><span class="dot"></span><span id="status-text">Checking local model…</span></div>
+        <small id="status-sub">connecting</small>
+      </div>
+    </aside>
+    <div id="scrim" class="scrim" hidden></div>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="top-title">
+          <button id="menu" class="icon-btn menu-btn" type="button" aria-label="Show conversations" data-icon="menu"></button>
+          <span class="title-text">Conversational Sales Analytics Agent</span>
+          <span id="online-badge" class="badge">Connecting</span>
+        </div>
+        <div class="top-actions">
+          <button id="theme" class="icon-btn" type="button" title="Toggle theme" aria-label="Toggle theme" data-icon="sun"></button>
+          <button id="settings" class="icon-btn" type="button" title="Settings" aria-label="Settings" aria-expanded="false" data-icon="settings"></button>
+        </div>
+        <div id="settings-panel" class="popover" hidden>
+          <div class="popover-title">Settings</div>
+          <dl class="popover-info">
+            <dt>Model</dt><dd id="info-model">…</dd>
+            <dt>Server</dt><dd id="info-server">…</dd>
+            <dt>Runtime</dt><dd id="info-runtime">…</dd>
+          </dl>
+          <button id="clear-all" class="danger-btn" type="button"><span data-icon="trash"></span>Clear all conversations</button>
+        </div>
+      </header>
+
+      <div id="chat" class="chat-wrap" aria-live="polite">
+        <section class="conversation">
+          <div id="welcome">
+            <div class="welcome">
+              <div class="welcome-icon" data-icon="bubble"></div>
+              <h1>Ask your sales data anything.</h1>
+              <p>Ask in plain English. I'll translate your question into SQL, run it on the Olist data, and explain the result.</p>
+            </div>
+            <div class="suggestions">
+              <button class="suggestion" type="button" data-q="How many orders were delivered in 2017?">
+                <strong>Orders by year</strong><span>How many orders were delivered in 2017?</span>
+              </button>
+              <button class="suggestion" type="button" data-q="Which categories have the worst reviews?">
+                <strong>Customer sentiment</strong><span>Which categories have the worst reviews?</span>
+              </button>
+              <button class="suggestion" type="button" data-q="How did São Paulo do last quarter?">
+                <strong>Regional performance</strong><span>How did São Paulo do last quarter?</span>
+              </button>
+              <button class="suggestion" type="button" data-q="What were our top 5 product categories by revenue in 2017?">
+                <strong>Revenue analysis</strong><span>What were our top 5 product categories by revenue in 2017?</span>
+              </button>
+            </div>
+          </div>
+          <div id="messages"></div>
+        </section>
+      </div>
+
+      <div class="composer-area">
+        <form id="composer" class="composer">
+          <div id="followup" class="followup" hidden>
+            <span class="followup-icon" data-icon="reply"></span>
+            <div class="followup-body">
+              <span class="followup-label">Following up on your question</span>
+              <b id="followup-text"></b>
+              <small id="followup-full" hidden></small>
+            </div>
+            <button id="followup-close" class="followup-close" type="button" aria-label="Cancel follow-up" data-icon="x"></button>
+          </div>
+          <div class="input-box">
+            <textarea id="input" rows="1" placeholder="Ask a question about your sales data..." autocomplete="off"></textarea>
+            <button id="send" class="send" type="submit" title="Send" aria-label="Send" data-icon="send"></button>
+          </div>
+          <div class="composer-hint">Enter to send · Shift + Enter for a new line · Runs on your local model</div>
+        </form>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

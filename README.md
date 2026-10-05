@@ -238,6 +238,14 @@ python chat.py               # 'reset' starts a new conversation, 'quit' exits
 
 If the model server isn't running or the database is missing, `chat.py` says what to do instead of crashing. Answers take about 3–60 seconds on a laptop.
 
+**4. Web UI.** The same agent in a browser chat, with the model server from step 2 running:
+
+```bash
+python ui/server.py          # then open http://127.0.0.1:8000
+```
+
+See [ui/README.md](ui/README.md) for what it shows.
+
 
 
 ## Configuration
@@ -260,6 +268,36 @@ LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen3.5-4b-8k python chat.py
 
 ## Project structure
 
+```
+conversational-sales-agent/
+├── agent.py            pipeline: resolve the question, generate SQL, validate, run, summarise
+├── checks.py           code checks on decisions, SQL and results; reference resolution
+├── facts.py            summary facts computed in code
+├── prompts.py          system prompt from the live schema and data coverage
+├── db.py               read-only DuckDB access with SQL guardrails
+├── llm.py              client for the local model server
+├── chat.py             terminal chat
+├── load_data.py        CSVs -> data/olist.duckdb, with the cleaned views
+├── data_checks.py      data-quality findings
+├── ui/
+│   ├── server.py       web chat server (standard library only)
+│   ├── README.md
+│   └── static/         index.html, style.css, app.js, vendor/gsap.min.js
+├── eval/
+│   ├── cases.py        the 25 eval questions (+ regression set)
+│   ├── run_eval.py     runs them against the agent
+│   ├── report.py       writes RESULTS.md
+│   ├── RESULTS.md
+│   └── results/final.json
+├── tests/              unit tests (no model needed)
+├── docs/DEVLOG.md      development log
+├── DESIGN.md
+├── README.md
+├── Modelfile           Ollama model definition (alternative runtime)
+├── requirements.txt
+└── data/               Olist CSVs and olist.duckdb (downloaded, not in git)
+```
+
 | Path | Purpose |
 |---|---|
 | `load_data.py` | Loads the CSVs into DuckDB and creates the cleaned views `sales` and `order_facts` |
@@ -273,6 +311,7 @@ LLM_BASE_URL=http://localhost:11434/v1 LLM_MODEL=qwen3.5-4b-8k python chat.py
 | `chat.py` | Terminal chat |
 | `eval/` | Eval questions, runner, report and final results |
 | `tests/` | Unit tests for the code checks and error handling |
+| `ui/` | Web chat for the same agent ([ui/README.md](ui/README.md)) |
 | `Modelfile` | Ollama model definition (alternative runtime) |
 
 ## Evaluation and tests
