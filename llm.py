@@ -1,7 +1,8 @@
 """Thin client for the local model server (OpenAI-compatible API).
 
-Works with any OpenAI-compatible local server (Ollama, llama.cpp, LM Studio,
-vLLM) by changing LLM_BASE_URL / LLM_MODEL. No hosted APIs are used.
+Defaults to llama.cpp's llama-server (the evaluated setup, see README). Works
+with any OpenAI-compatible local server (Ollama, LM Studio, vLLM) by changing
+LLM_BASE_URL / LLM_MODEL. No hosted APIs are used.
 Connection problems are raised as LLM*Error with a message saying how to fix them.
 """
 import os
@@ -9,16 +10,16 @@ import os
 import openai
 from openai import OpenAI
 
-BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1")  # Ollama
-MODEL = os.getenv("LLM_MODEL", "qwen3.5-4b-8k")  # built from ./Modelfile
+BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:8080/v1")  # llama-server
+MODEL = os.getenv("LLM_MODEL", "qwen3.5-4b")  # llama-server --alias qwen3.5-4b
 # A local 4B model can take a while on a laptop CPU, but should never hang forever.
 TIMEOUT = float(os.getenv("LLM_TIMEOUT", "300"))
 
 _client = OpenAI(base_url=BASE_URL, api_key="local", timeout=TIMEOUT, max_retries=1)
 
-START_HINT = ("Start it, e.g. `ollama serve` (model built with `ollama create {model} -f Modelfile`) "
-              "or `llama-server -m <model.gguf> --port 8080 -c 8192 --jinja` with "
-              "LLM_BASE_URL=http://localhost:8080/v1.")
+START_HINT = ("Start it with: llama-server -hf lmstudio-community/Qwen3.5-4B-GGUF:Q4_K_M --port 8080 "
+              "-c 8192 -np 1 --jinja --reasoning-budget 0 --alias {model} (or use Ollama, see the "
+              "README, and set LLM_BASE_URL / LLM_MODEL).")
 
 
 class LLMError(Exception):

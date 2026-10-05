@@ -180,6 +180,12 @@ def check_sql(sql: str, question: str = "") -> str:
                 "aggregation (e.g. SUM(CASE WHEN purchase_year = 2017 THEN revenue END) AS "
                 "revenue_2017), and do not group by purchase_year. Order by the latest "
                 "period's value, highest first.")
+    if ("sales" in used and re.search(r"\borders?\b", q) and not re.search(r"\b(items?|units?)\b", q)
+            and re.search(r"count\s*\(\s*\*\s*\)|sum\s*\(\s*case\b.*?\bthen\s+1\b", low, re.S)
+            and not re.search(r"select\s+distinct\s+order_id", low)):
+        return ("sales has one row per item, so COUNT(*) or SUM(CASE ... THEN 1) counts items, not "
+                "orders. Count orders with COUNT(DISTINCT order_id), or per period with "
+                "COUNT(DISTINCT CASE WHEN purchase_year = 2017 THEN order_id END).")
     grouped = {c.strip().split(".")[-1] for c in group_by.split(",") if c.strip()}
     aggregated = {m.lower() for m in re.findall(
         r"\b(?:avg|sum|min|max)\s*\(\s*(?:\w+\.)?(\w+)\s*\)", sql, re.I)}

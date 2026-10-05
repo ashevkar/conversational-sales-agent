@@ -283,6 +283,24 @@ def test_wrong_result_shape():
     assert wrong_result_shape("Orders by state", ["state", "orders"], [("AC", 1), ("AP", 3)]) == ""
 
 
+
+def test_counting_items_as_orders():
+    q = "How many orders did watches_gifts have in 2018 compared side by side with 2017?"
+    # Real failure (Ollama run): SUM(CASE ... THEN 1) on sales counted items.
+    bad = """SELECT SUM(CASE WHEN purchase_year = 2017 THEN 1 ELSE 0 END) AS orders_2017,
+       SUM(CASE WHEN purchase_year = 2018 THEN 1 ELSE 0 END) AS orders_2018
+FROM sales WHERE category = 'watches_gifts'"""
+    good = """SELECT COUNT(DISTINCT CASE WHEN purchase_year = 2017 THEN order_id END) AS orders_2017,
+       COUNT(DISTINCT CASE WHEN purchase_year = 2018 THEN order_id END) AS orders_2018
+FROM sales WHERE category = 'watches_gifts'"""
+    assert "counts items, not orders" in check_sql(bad, q)
+    assert check_sql(good, q) == ""
+    assert "counts items" in check_sql("SELECT COUNT(*) FROM sales WHERE purchase_year = 2017",
+                                       "How many orders in 2017?")
+    assert check_sql("SELECT COUNT(*) FROM order_facts WHERE purchase_year = 2017", "How many orders in 2017?") == ""
+    assert check_sql("SELECT COUNT(*) FROM sales WHERE purchase_year = 2017", "How many items were sold in 2017?") == ""
+
+
 if __name__ == "__main__":
     tests = [f for name, f in sorted(globals().items()) if name.startswith("test_")]
     for t in tests:
