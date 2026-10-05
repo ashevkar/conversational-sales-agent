@@ -9,7 +9,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from checks import (cannot_error, check_sql, clarify_error, duplicates_suspicious,  # noqa: E402
-                    outside_coverage, repeated_measures, small_talk_reply)
+                    find_reference, outside_coverage, previous_year_anchor, repeated_measures,
+                    resolve_reference, small_talk_reply, empty_period_column, unknown_values,
+                    wrong_result_shape)
 
 FIRST, LAST = date(2016, 9, 4), date(2018, 9, 3)
 
@@ -171,6 +173,114 @@ def test_repeated_measures():
     assert not repeated_measures("SELECT category, AVG(s), COUNT(*) FROM t GROUP BY 1",
                                  [("a", 5.0, 1), ("b", 5.0, 2), ("c", 5.0, 1)])
     assert not repeated_measures(ITEM_PRICES, [(1, 21.33), (2, 21.33), (3, 21.33)])
+
+
+
+# ---- references to the previous answer -------------------------------------------
+
+TOP5_COLS = ["category", "revenue"]
+TOP5_ROWS = [("bed_bath_table", 497970.94), ("watches_gifts", 486519.02), ("health_beauty", 481142.73),
+             ("sports_leisure", 447546.59), ("computers_accessories", 400490.61)]
+WORST_COLS = ["category", "avg_score", "orders"]
+WORST_ROWS = [("security_and_services", 2.5, 2), ("pc_gamer", 3.43, 7), ("office_furniture", 3.62, 1262)]
+
+
+def test_find_reference():
+    assert find_reference("How many orders did it have?")["kind"] == "pointer"
+    assert find_reference("What was its revenue?")["kind"] == "pointer"
+    assert find_reference("How many orders did that seller have?")["kind"] == "pointer"
+    assert find_reference("Average score for that category")["kind"] == "pointer"
+    r = find_reference("What was the average review score of the second one?")
+    assert r["kind"] == "ordinal" and r["n"] == 2
+    assert find_reference("and the last one?")["n"] == -1
+    assert find_reference("what about #3")["n"] == 3
+    # "it" meaning the whole previous question is not an item reference.
+    for msg in ["Break it down by customer state.", "Compare it with 2018", "How about this year?",
+                "Only count orders that were actually delivered.", "Top 5 categories by revenue in 2017"]:
+        assert find_reference(msg) is None, msg
+
+
+def test_resolve_ordinal():
+    kind, desc, values, filters = resolve_reference({"kind": "ordinal", "n": 2, "text": "second one"},
+                                           TOP5_COLS, TOP5_ROWS, "Top 5 categories by revenue in 2017")
+    assert kind == "resolved" and values == ["watches_gifts"] and "category watches_gifts" in desc
+    assert filters == ["category = 'watches_gifts'"]
+    assert resolve_reference({"kind": "ordinal", "n": -1, "text": "last one"},
+                             TOP5_COLS, TOP5_ROWS, "x")[2] == ["computers_accessories"]
+    assert resolve_reference({"kind": "ordinal", "n": 5, "text": "#5"}, WORST_COLS, WORST_ROWS, "x")[0] == "clarify"
+
+
+def test_resolve_pointer():
+    it = {"kind": "pointer", "text": "did it"}
+    # A question asking for one item: "it" is the first row.
+    assert resolve_reference(it, WORST_COLS, WORST_ROWS,
+                             "Which category had the worst reviews?")[2] == ["security_and_services"]
+    assert resolve_reference(it, ["seller_id", "revenue"], [("4869f7a5dfa277a7dca6462dcf3b52b2", 229237.63)],
+                             "Which seller has the highest revenue?")[2] == ["4869f7a5dfa277a7dca6462dcf3b52b2"]
+    # A list: "that category" is ambiguous, so ask, naming the options.
+    kind, question, _, _ = resolve_reference({"kind": "pointer", "text": "that category"},
+                                          TOP5_COLS, TOP5_ROWS, "Top 5 categories by revenue in 2017")
+    assert kind == "clarify" and "watches_gifts" in question and "category watches" not in question
+    # A single total has no item to point at.
+    assert resolve_reference(it, ["revenue"], [(6108492.27,)], "What was our revenue in 2017?") is None
+
+
+def test_previous_year_anchor():
+    from datetime import date
+    f, l = date(2016, 9, 4), date(2018, 9, 3)
+    assert previous_year_anchor("What about the previous year?", "Top 3 categories by revenue in 2018", f, l) \
+        == ("resolved", '"previous year" = 2017', ["2017"], ["purchase_year = 2017"])
+    assert previous_year_anchor("And the year before?", "Which category had the worst reviews?", f, l)[0] == "clarify"
+    assert previous_year_anchor("previous year?", "Compare 2017 with 2018", f, l)[0] == "clarify"
+    assert previous_year_anchor("What was revenue last year?", "Revenue in 2018", f, l) is None  # data-relative
+
+
+
+def test_empty_period_column():
+    q = "Top 3 categories by revenue in 2017 compared side by side with 2018"
+    cols = ["category", "revenue_2017", "revenue_2018"]
+    # Real failure: LIMIT 3 on category-year rows kept only 2018 rows.
+    assert "revenue_2017" in empty_period_column(q, cols, [("watches_gifts", 0.0, 708305.95),
+                                                            ("health_beauty", 0.0, 770002.81)])
+    assert empty_period_column(q, cols, [("bed_bath_table", 497970.94, 537514.13)]) == ""
+    assert empty_period_column("Revenue by category", cols, [("x", 0.0, 1.0)]) == ""
+
+
+
+def test_unknown_values():
+    known = {"category": {"toys", "health_beauty"}, "customer_state": {"SP", "RJ"}}
+    assert "Did you mean 'toys'" in unknown_values("SELECT 1 FROM sales s WHERE s.category = 'Toys'", known)
+    assert "Did you mean 'health_beauty'" in unknown_values(
+        "SELECT 1 FROM sales WHERE category IN ('toys', 'helth_beauty')", known)
+    assert "'Sao Paulo' is not a value of customer_state" in unknown_values(
+        "SELECT 1 FROM sales WHERE customer_state = 'Sao Paulo'", known)
+    assert unknown_values("SELECT 1 FROM sales WHERE customer_state = 'SP' AND category = 'toys'", known) == ""
+
+
+
+def test_grouping_by_an_aggregated_column():
+    # Real failure: the average score per score value is just the score itself.
+    bad = """SELECT ROUND(AVG(f.review_score), 2) AS avg_review_score, COUNT(f.review_score) AS orders
+FROM order_facts f JOIN (SELECT DISTINCT order_id, category FROM sales WHERE category = 'watches_gifts') s
+ON f.order_id = s.order_id GROUP BY f.review_score ORDER BY avg_review_score DESC"""
+    assert "Remove review_score from GROUP BY" in check_sql(bad, "average review score of watches_gifts")
+    assert check_sql(REVIEWS_BY_SELLER_STATE, "Average review score by seller state") == ""
+
+
+
+def test_wrong_result_shape():
+    q = "Top 3 categories by revenue in 2017 compared side by side with 2018"
+    cols = ["category", "revenue_2017", "revenue_2018"]
+    # Real failure: both columns were SUM(revenue) over both years.
+    assert "identical in every row" in wrong_result_shape(q, cols, [
+        ("health_beauty", 1251145.54, 1251145.54), ("watches_gifts", 1194824.97, 1194824.97)])
+    assert wrong_result_shape(q, cols, [("bed_bath_table", 497970.94, 537514.13)]) == ""
+    # Real failure: GROUP BY order_id gave one row per order, each COUNT = 1.
+    per_order = [(5.0, 1)] * 6
+    assert "unique id" in wrong_result_shape("Average review score of watches_gifts in 2017",
+                                             ["avg_review_score", "orders"], per_order)
+    assert wrong_result_shape("List each order with its review count", ["avg", "orders"], per_order) == ""
+    assert wrong_result_shape("Orders by state", ["state", "orders"], [("AC", 1), ("AP", 3)]) == ""
 
 
 if __name__ == "__main__":

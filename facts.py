@@ -36,7 +36,7 @@ def _is_number(v) -> bool:
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
 
-def _roles(columns, rows):
+def roles(columns, rows):
     """Split columns into label columns (text, time) and measure columns (numbers)."""
     labels, measures = [], []
     for i, col in enumerate(columns):
@@ -48,7 +48,7 @@ def _roles(columns, rows):
     return labels, measures
 
 
-def _label(columns, row, labels) -> str:
+def label(columns, row, labels) -> str:
     parts = []
     for i in labels:
         col, v = columns[i].lower(), row[i]
@@ -80,16 +80,16 @@ def small_summary(columns, rows) -> str | None:
         return "No matching data was found."
     if len(rows) > 5:
         return None
-    labels, measures = _roles(columns, rows)
-    if not measures:
-        return None  # nothing to quote; let the model describe it
+    labels, measures = roles(columns, rows)
+    if not measures or (not labels and len(rows) > 1):
+        return None  # nothing to quote, or no way to tell the rows apart
     if len(rows) == 1 and not labels:
         text = "; ".join(f"{humanize(columns[i])}: {fmt(rows[0][i])}" for i in measures) + "."
     else:
         items = []
         for row in rows:
             values = ", ".join(f"{humanize(columns[i])} {fmt(row[i])}" for i in measures)
-            items.append(f"{_label(columns, row, labels)} ({values})")
+            items.append(f"{label(columns, row, labels)} ({values})")
         text = "; ".join(items) + "."
     note = small_group_note(columns, rows, measures)
     return text + (" " + note if note else "")
@@ -97,7 +97,7 @@ def small_summary(columns, rows) -> str | None:
 
 def key_facts(columns, rows) -> list[dict]:
     """Highest and lowest row for up to 3 measure columns (counts only if nothing else)."""
-    labels, measures = _roles(columns, rows)
+    labels, measures = roles(columns, rows)
     main = [i for i in measures if not COUNT_COLUMNS.search(columns[i].lower())] or measures
     facts = []
     for i in main[:3]:
@@ -106,8 +106,8 @@ def key_facts(columns, rows) -> list[dict]:
             continue
         hi, lo = max(valued, key=lambda r: r[i]), min(valued, key=lambda r: r[i])
         facts.append({"column": humanize(columns[i]),
-                      "high": (_label(columns, hi, labels), fmt(hi[i])),
-                      "low": (_label(columns, lo, labels), fmt(lo[i]))})
+                      "high": (label(columns, hi, labels), fmt(hi[i])),
+                      "low": (label(columns, lo, labels), fmt(lo[i]))})
     return facts
 
 

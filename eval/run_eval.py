@@ -66,6 +66,17 @@ def run_check(check: dict, reply) -> str:
     if kind == "kind":
         allowed = check["kind"] if isinstance(check["kind"], list) else [check["kind"]]
         return "" if reply.kind in allowed else f"kind={reply.kind}, expected {'/'.join(allowed)}"
+    if kind in ("question_has", "question_lacks"):
+        # The standalone question the agent actually answered ("Interpreted as").
+        q = (reply.question or "").lower()
+        hits = [i for i in check["items"] if any(a.lower() in q for a in i.split("|"))]
+        if kind == "question_has":
+            missing = [i for i in check["items"] if i not in hits]
+            return f"question missing {missing}: {reply.question[:120]}" if missing else ""
+        return f"question contains {hits}: {reply.question[:120]}" if hits else ""
+    if kind == "sql_has":
+        missing = [i for i in check["items"] if i not in (reply.sql or "")]
+        return f"SQL missing {missing}" if missing else ""
     if kind == "no_data":
         # Honest either way: CANNOT, or an answer whose table has no real values.
         if reply.kind == "cannot":
@@ -96,6 +107,11 @@ def run_check(check: dict, reply) -> str:
         if not values:
             return "no values"
         return f"unexpected values {sorted(extra)[:8]}" if extra else ""
+    if kind == "value_is":
+        # A one-cell result must be exactly this value ("a|b" = either form).
+        rows = table_rows(table)
+        cell = rows[0][-1] if len(rows) == 1 else None
+        return "" if cell in check["value"].split("|") else f"value {cell!r}, expected {check['value']}"
     if kind == "row_count":
         n = len(table_rows(table))
         return "" if n == check["rows"] else f"{n} rows, expected {check['rows']}"
@@ -114,9 +130,11 @@ def main():
     global _calls
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", help="run only cases whose name contains this text")
+    parser.add_argument("--category", help="run only cases in this category")
     args = parser.parse_args()
 
-    cases = [c for c in CASES if not args.only or args.only.lower() in c["name"].lower()]
+    cases = [c for c in CASES if (not args.only or args.only.lower() in c["name"].lower())
+             and (not args.category or c["category"] == args.category)]
     print(f"Model: {llm.MODEL} at {llm.BASE_URL}  ({len(cases)} cases)\n")
 
     results = []

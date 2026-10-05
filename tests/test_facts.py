@@ -22,6 +22,7 @@ def test_small_results_summarised_in_code():
     text = small_summary(["category", "revenue"], [("bed_bath_table", 497970.94), ("watches_gifts", 486519.02)])
     assert "bed_bath_table (revenue 497,970.94)" in text and "watches_gifts (revenue 486,519.02)" in text
     assert small_summary(MONTHLY_COLS, MONTHLY_ROWS) is None  # > 5 rows: the model writes it
+    assert small_summary(["avg", "orders"], [(5.0, 1231), (4.0, 416)]) is None  # rows have no labels
 
 
 def test_small_group_warning():

@@ -3,6 +3,10 @@
 Per turn:
   0. Small talk and years outside the data are answered in code (no LLM call).
   1. Resolve: turn the latest message into one standalone question.
+     - References to the previous answer ("it", "that seller", "the second
+       one", "the previous year") are resolved in code from the last result
+       (checks.py): to ONE value, which is the only result data the rewrite
+       sees, or to a clarifying question when the reference is ambiguous.
      - After a clarifying question, a bare "yes/ok" re-asks it (no LLM call),
        and a real answer is merged using ONLY the clarifying exchange.
      - Otherwise an LLM rewrite carries over filters, periods and groupings.
@@ -26,15 +30,17 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from checks import (cannot_error, check_sql, clarify_error, duplicates_suspicious,
-                    main_group_by, outside_coverage, repeated_measures, small_talk_reply)
+from checks import (VALUE_COLUMNS, cannot_error, check_sql, clarify_error,
+                    duplicates_suspicious, empty_period_column, find_reference, main_group_by,
+                    outside_coverage, previous_year_anchor, repeated_measures,
+                    resolve_reference, small_talk_reply, unknown_values, wrong_result_shape)
 from db import QueryError, connect, format_table, run_sql
 from facts import (drop_filler, facts_sentence, facts_text, key_facts, small_summary,
                    superlatives_ok)
 from llm import chat
 from prompts import build_system_prompt, relative_periods
 
-MAX_SQL_ATTEMPTS = 3
+MAX_SQL_ATTEMPTS = 4  # a compound query can trip two independent checks
 HISTORY_TURNS = 6  # question/reply pairs kept for the rewrite step
 
 SQL_BLOCK = re.compile(r"```(?:sql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -79,13 +85,14 @@ Rules:
 - If the assistant just asked a clarifying question and the user picked an option, merge their choice into that question.
 - If the latest message is a new, unrelated question, return it unchanged.
 - If the latest message is not a question or request about the data (a name, a greeting, random text), return it unchanged.
+- If references are resolved below, write their exact values into the question instead of "it", "that ...", "the second one" or "the previous year".
 - Output only the rewritten question. No explanation, no quotes.
 
 Conversation so far:
 {conversation}
 
 Latest message: {message}
-
+{resolved}
 Standalone question:"""
 
 SUMMARY_PROMPT = """You explain a database query result to a business user.
@@ -164,6 +171,13 @@ class Agent:
         self.con = connect()
         self.system = build_system_prompt(self.con)
         self.history: list[tuple[str, str]] = []  # (standalone question, short reply)
+        # Columns and rows of the last ANSWERED question's result, used only by
+        # code to resolve references; the rewrite model never sees these rows.
+        self.last_result: tuple[list[str], list[tuple]] | None = None
+        # Values a reference in the current message resolved to, and the SQL
+        # filters that select them; the SQL must use them.
+        self.resolved_values: list[str] = []
+        self.resolved_filters: list[str] = []
 
         # Years that don't cover Jan-Dec, with a fixed caveat sentence.
         self.partial_years = {}
@@ -175,6 +189,14 @@ class Agent:
             if not (first.month == 1 and first.day <= 7 and last.month == 12 and last.day >= 24):
                 self.partial_years[year] = f"{year} is a partial year (data from {first} to {last})"
         self.years = {year for year, _, _ in spans}
+        # Real values of filterable text columns, to catch filters like 'Toys'.
+        self.known_values = {}
+        for table in ("sales", "order_facts", "payments"):
+            columns = {c[0] for c in self.con.execute(f"DESCRIBE {table}").fetchall()}
+            for col in set(VALUE_COLUMNS) & columns:
+                found = {v for (v,) in self.con.execute(
+                    f"SELECT DISTINCT {col} FROM {table} WHERE {col} IS NOT NULL").fetchall()}
+                self.known_values[col] = self.known_values.get(col, set()) | found
         self.first_date, self.last_date = spans[0][1], spans[-1][2]
 
         # How relative periods were resolved (from the data's latest date), as
@@ -191,16 +213,21 @@ class Agent:
 
     def reset(self):
         self.history = []
+        self.last_result = None
 
     def _remember(self, question: str, reply: str):
         self.history.append((question, reply))
         self.history = self.history[-HISTORY_TURNS:]
 
-    def _rewrite(self, message: str, history: list[tuple[str, str]]) -> str:
+    def _rewrite(self, message: str, history: list[tuple[str, str]],
+                 resolved: list[str] = ()) -> str:
         convo = "\n".join(f"User: {q}\nAssistant: {r}" for q, r in history)
+        refs = ("References already resolved:\n" + "\n".join(f"- {r}" for r in resolved)
+                + "\n") if resolved else ""
         prompt = (REWRITE_PROMPT
                   .replace("{conversation}", convo)
-                  .replace("{message}", message))
+                  .replace("{message}", message)
+                  .replace("{resolved}", refs))
         out = chat([{"role": "user", "content": prompt}], max_tokens=200)
         out = out.strip().strip('"').strip()
         if out.lower().startswith("standalone question:"):
@@ -216,28 +243,63 @@ class Agent:
         out = chat([{"role": "user", "content": prompt}], max_tokens=5)
         return "FOLLOW" in out.upper()
 
-    def _resolve_question(self, message: str) -> str:
+    def _resolve_question(self, message: str) -> tuple[str, tuple[str, str] | None]:
+        """Return (standalone question, clarification), where clarification is
+        (question to remember, clarifying question) when the agent must ask first."""
         if not self.history:
-            return message
+            return message, None
         prev_q, prev_r = self.history[-1]
         if prev_r.startswith("CLARIFY"):
             if message.strip().lower().strip(".!") in NON_ANSWERS:
-                return prev_q  # didn't pick an option, so ask again
+                return prev_q, None  # didn't pick an option, so ask again
+            # "the second one" as the answer to "which one do you mean?"
+            ref = find_reference(message)
+            if ref and ref["kind"] == "ordinal" and self.last_result:
+                outcome = resolve_reference(ref, *self.last_result, prev_q)
+                if outcome and outcome[0] == "resolved":
+                    message = outcome[1].split(" = ", 1)[1]
             if self._is_follow_up(message, [(prev_q, prev_r)]):
                 # Attach the answer to the original question directly. No LLM
                 # rewrite, so nothing from older turns can leak in.
-                return f"{prev_q} (Clarification: {message.strip()})"
-            return message  # user skipped the clarifying question and asked something new
+                return f"{prev_q} (Clarification: {message.strip()})", None
+            return message, None  # user skipped the clarifying question and asked something new
         # Only an answered question can be followed up. Answered questions are
         # stored in standalone form, so the latest one carries the whole
         # conversation state; older turns aren't shown, so they can't leak in.
         answered = [(q, r) for q, r in self.history if r == "Answered."]
         if not answered:
-            return message
+            return message, None
         last = answered[-1:]
-        if not self._is_follow_up(message, last):
-            return message  # a new, self-contained question
-        return self._rewrite(message, last)
+        last_q = last[0][0]
+
+        # References to the previous answer are found and resolved in code.
+        resolved, must_appear, filters = [], [], []
+        ref = find_reference(message)
+        if ref and self.last_result:
+            outcome = resolve_reference(ref, *self.last_result, last_q)
+            if outcome and outcome[0] == "clarify":
+                return message, (f"{message} (one item from the answer to: {last_q})", outcome[1])
+            if outcome:
+                resolved.append(outcome[1])
+                must_appear += outcome[2]
+                filters += outcome[3]
+        year = previous_year_anchor(message, last_q, self.first_date, self.last_date)
+        if year and year[0] == "clarify":
+            return message, (f"{last_q} (for one specific year)", year[1])
+        if year:
+            resolved.append(year[1])
+            must_appear += year[2]
+            filters += year[3]
+
+        # A message with a reference is a follow-up by definition; otherwise ask.
+        if not (ref or year) and not self._is_follow_up(message, last):
+            return message, None  # a new, self-contained question
+        question = self._rewrite(message, last, resolved)
+        # The rewrite must carry every resolved value; if it dropped one, add it.
+        if not all(value in question for value in must_appear):
+            question += " (" + "; ".join(resolved) + ")"
+        self.resolved_values, self.resolved_filters = must_appear, filters
+        return question, None
 
     def _interpretation_notes(self, question: str, sql: str) -> list[str]:
         """Say how relative periods and state/city names were read, when the SQL used them."""
@@ -291,7 +353,12 @@ class Agent:
             self._remember(message, f"CANNOT: {small_talk}")
             return Reply("cannot", small_talk, question=message)
 
-        question = self._resolve_question(message)
+        self.resolved_values, self.resolved_filters = [], []
+        question, clarification = self._resolve_question(message)
+        if clarification:
+            remembered, text = clarification
+            self._remember(remembered, f"CLARIFY: {text}")
+            return Reply("clarify", text, question=remembered)
 
         # Every year asked about is outside the data: say so instead of querying.
         gap = outside_coverage(question, self.years, self.first_date, self.last_date)
@@ -312,6 +379,7 @@ class Agent:
         clarify_checked = cannot_checked = False
         duplicates_checked = False  # duplicate rows are questioned at most once
         repeats_checked = False     # so are measures repeated across groups
+        empty_checked = False       # and empty period columns in comparisons
 
         for attempt in range(1, MAX_SQL_ATTEMPTS + 1):
             raw = chat(messages)
@@ -333,7 +401,16 @@ class Agent:
             elif kind == "none":
                 last_error = "Your reply was not in the SQL / CLARIFY / CANNOT format."
             else:  # sql
-                last_error = check_sql(payload, question)
+                last_error = (check_sql(payload, question)
+                              or unknown_values(payload, self.known_values))
+                # A resolved reference ("the second one" = watches_gifts) must be a
+                # filter in the SQL, not just a row the summary picks out.
+                unused = [v for v in self.resolved_values if v not in payload]
+                if not last_error and unused:
+                    last_error = (f"The question is about {', '.join(unused)} only. Add this "
+                                  f"filter: WHERE {' AND '.join(self.resolved_filters)} (inside "
+                                  "the subquery if the query has one), so the result covers "
+                                  "only that item.")
                 if not last_error:
                     try:
                         result = run_sql(self.con, payload)
@@ -346,6 +423,12 @@ class Agent:
                             duplicates_checked = True
                             last_error = ("The result has duplicate rows, which usually "
                                           "means an unnecessary join. Remove it.")
+                        elif wrong_result_shape(question, result["columns"], rows):
+                            last_error = wrong_result_shape(question, result["columns"], rows)
+                        elif not empty_checked and empty_period_column(
+                                question, result["columns"], rows):
+                            empty_checked = True
+                            last_error = empty_period_column(question, result["columns"], rows)
                         elif not repeats_checked and repeated_measures(payload, rows):
                             repeats_checked = True
                             last_error = ("Several groups show exactly the same values: the "
@@ -358,12 +441,17 @@ class Agent:
                             table = format_table(result)
                             text = self._summarize(question, result, table)
                             self._remember(question, "Answered.")
+                            self.last_result = (result["columns"], result["rows"])
                             return Reply("answer", text, question=question,
                                          sql=result["sql"], table=table, attempts=attempt)
 
+            # In a turn with a resolved reference, every retry repeats the required
+            # filter, so fixing one problem cannot silently drop it.
+            keep = (f"\nKeep the filter WHERE {' AND '.join(self.resolved_filters)}."
+                    if self.resolved_filters and "Add this filter" not in last_error else "")
             messages += [
                 {"role": "assistant", "content": raw},
-                {"role": "user", "content": f"That did not work: {last_error}\n"
+                {"role": "user", "content": f"That did not work: {last_error}{keep}\n"
                                             "Fix it and reply again in the required format."},
             ]
 

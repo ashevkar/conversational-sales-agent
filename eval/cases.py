@@ -13,6 +13,8 @@ a known bug; `category` groups the results:
   clarify     genuinely ambiguous requests and what happens after clarifying
   cannot      questions the data cannot answer
   held-out    per-order questions with no similar example in the prompt
+  references  follow-ups that point at an item of the previous ANSWER ("it",
+              "that seller", "the second one") or at "the previous year"
 
 Check types:
   table_has     every item must appear in the result table ("a|b" = either form)
@@ -23,6 +25,10 @@ Check types:
   superlative   the first number after "highest/peak/largest/..." must be `value`
   row_count     the result must have exactly `rows` rows
   no_data       CANNOT, or an answer whose table has no real values
+  value_is      a one-cell result must be exactly `value` ("a|b" = either form)
+  question_has  every item must appear in the standalone question the agent answered
+  question_lacks  no item may appear in that question (no leaked context)
+  sql_has       every item must appear in the executed SQL (e.g. a resolved filter value)
 Several checks can be combined; all must pass.
 """
 
@@ -220,5 +226,102 @@ CASES = [
         "category": "held-out",
         "turns": ["Average amount paid per order by customer state, excluding canceled orders"],
         "checks": [{"type": "table_has", "items": ["264.63", "142.95"]}],
+    },
+    # ---- references ------------------------------------------------------
+    # Follow-ups that point at an item of the previous answer. The item is
+    # resolved in code from the stored result; the standalone question must
+    # name it, and must not pick up anything the user did not point at.
+    {
+        "name": "'it' = the item the previous question asked for",
+        "category": "references",
+        "turns": ["Which category had the worst reviews?",
+                  {"ask": "How many orders did it have?",
+                   "checks": [{"type": "question_has", "items": ["security_and_services"]},
+                              {"type": "sql_has", "items": ["security_and_services"]},
+                              {"type": "value_is", "value": "2"}]}],
+    },
+    {
+        "name": "'that seller'",
+        "category": "references",
+        "turns": ["Which seller has the highest revenue?",
+                  {"ask": "How many orders did that seller have?",
+                   "checks": [{"type": "question_has", "items": ["4869f7a5dfa277a7dca6462dcf3b52b2"]},
+                              {"type": "sql_has", "items": ["4869f7a5dfa277a7dca6462dcf3b52b2"]},
+                              {"type": "value_is", "value": "1131|1,131"}]}],
+    },
+    {
+        "name": "'that category' after a one-item answer",
+        "category": "references",
+        "turns": ["Which category had the highest revenue in 2018?",
+                  {"ask": "How many distinct sellers sold in that category in 2018?",
+                   "checks": [{"type": "question_has", "items": ["health_beauty"]},
+                              {"type": "sql_has", "items": ["health_beauty"]},
+                              {"type": "value_is", "value": "393"}]}],
+    },
+    {
+        "name": "'that category' after a list asks which one",
+        "category": "references",
+        # Five categories were listed, so "that category" is ambiguous.
+        "turns": ["Top 5 categories by revenue in 2017",
+                  {"ask": "What was the average review score for that category?",
+                   "checks": [{"type": "kind", "kind": "clarify"}]}],
+    },
+    {
+        "name": "'the second one'",
+        "category": "references",
+        # 4.07 over all data, 4.14 if the 2017 period is carried over.
+        "turns": ["Top 5 categories by revenue in 2017",
+                  {"ask": "What was the average review score of the second one?",
+                   "checks": [{"type": "question_has", "items": ["watches_gifts"]},
+                              {"type": "sql_has", "items": ["watches_gifts"]},
+                              {"type": "table_has", "items": ["4.07|4.14"]}]}],
+    },
+    {
+        "name": "'previous year' with a year to anchor on",
+        "category": "references",
+        # The same 3 categories lead in 2017, so either reading (2017 alone, or
+        # side by side) must show their 2017 revenue.
+        "turns": ["Top 3 categories by revenue in 2018",
+                  {"ask": "What about the previous year?",
+                   "checks": [{"type": "question_has", "items": ["2017"]},
+                              {"type": "table_has", "items": ["497,970.94", "486,519.02"]}]}],
+    },
+    {
+        "name": "'previous year' with no anchor asks, then answers",
+        "category": "references",
+        "turns": ["Which category had the worst reviews?",
+                  {"ask": "What about the previous year?",
+                   "checks": [{"type": "kind", "kind": "clarify"}]},
+                  {"ask": "2017",
+                   "checks": [{"type": "table_has", "items": ["diapers_and_hygiene"]}]}],
+    },
+    {
+        "name": "unrelated new question does not inherit the previous answer",
+        "category": "references",
+        "turns": ["Which seller has the highest revenue?",
+                  {"ask": "How many orders were canceled in 2017?",
+                   "checks": [{"type": "question_lacks", "items": ["4869f7a5dfa277a7dca6462dcf3b52b2", "seller"]},
+                              {"type": "value_is", "value": "265"}]}],
+    },
+    {
+        "name": "several follow-ups on a referenced item",
+        "category": "references",
+        "turns": ["Top 5 categories by revenue in 2017",
+                  {"ask": "How many orders did the second one have?",
+                   "checks": [{"type": "question_has", "items": ["watches_gifts"]},
+                              {"type": "sql_has", "items": ["watches_gifts"]},
+                              {"type": "value_is", "value": "2114|2,114"}]},
+                  {"ask": "And in 2018?",
+                   "checks": [{"type": "question_has", "items": ["watches_gifts", "2018"]},
+                              {"type": "value_is", "value": "3485|3,485"}]}],
+    },
+    {
+        "name": "naming a different item does not leak the listed ones",
+        "category": "references",
+        "turns": ["Top 5 categories by revenue in 2017",
+                  {"ask": "What was revenue for toys in 2017?",
+                   "checks": [{"type": "question_lacks", "items": ["bed_bath_table", "watches_gifts",
+                                                                   "health_beauty"]},
+                              {"type": "table_has", "items": ["305,991.37"]}]}],
     },
 ]

@@ -168,7 +168,8 @@ def check_sql(sql: str, question: str = "") -> str:
             and not re.search(r"distinct\s+order_id", low)):
         return ("Joining sales (one row per item) to order_facts repeats each order's values "
                 "once per item and skews totals and averages. Use order_facts alone, or join "
-                "it to (SELECT DISTINCT order_id, <column> FROM sales).")
+                "it to (SELECT DISTINCT order_id, <column> FROM sales WHERE <your filters on "
+                "sales columns>). Keep every filter you had.")
     if (re.search(r"\bsellers?\b", q) and not re.search(r"\b(states?|cit(y|ies)|regions?)\b", q)
             and re.search(r"\bseller_(state|city)\b", group_by) and "seller_id" not in low):
         return ("'Sellers' means individual sellers: group by seller_id (you may add "
@@ -179,6 +180,13 @@ def check_sql(sql: str, question: str = "") -> str:
                 "aggregation (e.g. SUM(CASE WHEN purchase_year = 2017 THEN revenue END) AS "
                 "revenue_2017), and do not group by purchase_year. Order by the latest "
                 "period's value, highest first.")
+    grouped = {c.strip().split(".")[-1] for c in group_by.split(",") if c.strip()}
+    aggregated = {m.lower() for m in re.findall(
+        r"\b(?:avg|sum|min|max)\s*\(\s*(?:\w+\.)?(\w+)\s*\)", sql, re.I)}
+    both = sorted(grouped & aggregated)
+    if both:
+        return (f"You group by {', '.join(both)} and also aggregate it, so each group only "
+                f"repeats its own value. Remove {', '.join(both)} from GROUP BY.")
     if (TOP_N.search(q) and BREAKDOWN.search(q) and low.count("select") == 1
             and re.search(r"\blimit\b", low) and "," in group_by):
         return ("LIMIT on the broken-down rows keeps the wrong rows. First pick the top N in a "
@@ -209,3 +217,183 @@ def repeated_measures(sql: str, rows: list[tuple]) -> bool:
         if len(measures) >= 2:
             seen[measures] = seen.get(measures, 0) + 1
     return any(n >= 3 for n in seen.values())
+
+
+# ---- references to the previous answer ------------------------------------------
+# The rewrite model never sees previous result rows. Code finds the reference,
+# resolves it to ONE value from the stored result, and only that value is handed
+# to the rewrite, so other rows cannot leak into the new question.
+
+ORDINALS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "last": -1}
+ENTITY_NOUNS = (r"(one|ones|item|seller|sellers|category|categories|state|states|"
+                r"product|products|customer|customers|city|cities|month|quarter)")
+ORDINAL_REF = re.compile(
+    r"\b(first|second|third|fourth|fifth|last)\s+" + ENTITY_NOUNS + r"\b"
+    r"|(?:\bnumber|\bno\.|#)\s*([1-5])\b")
+# "it" only as the thing being measured ("did it have", "its revenue"), not as
+# the whole previous question ("break it down", "compare it with 2018").
+POINTER_REF = re.compile(
+    r"\b(did|does|do|was|is|has|had)\s+it\b|\bit\s+(had|has|have|sold|sell|got|get|made|make)\b"
+    r"|\bits\s+[a-z]"
+    r"|\b(that|this|those|these|the same)\s+" + ENTITY_NOUNS + r"\b")
+PREVIOUS_YEAR = re.compile(r"\b(previous|prior|preceding)\s+year\b|\bthe year before\b"
+                           r"|\ba year (earlier|before)\b")
+SINGULAR_QUESTION = re.compile(
+    r"\b(which|what)\s+[a-z_]*[^s\W]\s+(has|had|is|was|did|does|got|made|sold)\b"
+    r"|\bwho\s+(is|was)\b|\bwhich\s+(one|seller|category|state|product|customer|city)\b")
+
+
+def find_reference(message: str) -> dict | None:
+    """A reference to an item of the previous answer, or None."""
+    q = plain(message)
+    m = ORDINAL_REF.search(q)
+    if m:
+        n = ORDINALS[m.group(1)] if m.group(1) else int(m.group(3))
+        return {"kind": "ordinal", "n": n, "text": m.group(0)}
+    m = POINTER_REF.search(q)
+    if m:
+        return {"kind": "pointer", "text": m.group(0)}
+    return None
+
+
+def _describe(columns, row, labels) -> tuple[str, list[str], list[str]]:
+    """For one result row: a description ('category watches_gifts'), the values
+    that must reach the question, and the SQL filters that select it."""
+    parts, values, filters = [], [], []
+    for i in labels:
+        value = row[i]
+        if value is None:
+            continue
+        parts.append(f"{columns[i]} {value}")
+        values.append(str(value))
+        filters.append(f"{columns[i]} = '{value}'" if isinstance(value, str)
+                       else f"{columns[i]} = {value}")
+    return " and ".join(parts), values, filters
+
+
+def resolve_reference(ref: dict, columns: list[str], rows: list[tuple],
+                      previous_question: str) -> tuple[str, str, list[str], list[str]] | None:
+    """Resolve a reference against the previous result.
+
+    Returns ("resolved", description, values, sql_filters), ("clarify", question,
+    [], []), or None when the previous answer has no item labels (e.g. a total).
+    """
+    from facts import roles  # local import: facts does not depend on checks
+    labels, _ = roles(columns, rows)
+    labels = [i for i in labels if not re.search(r"(^|_)(year|quarter|month)$", columns[i].lower())] \
+        or labels
+    if not rows or not labels:
+        return None
+
+    def options():
+        # Values only ("bed_bath_table, watches_gifts or ..."), not column names.
+        names = [" / ".join(_describe(columns, r, labels)[1]) for r in rows[:5]]
+        return ", ".join(names[:-1]) + (" or " if len(names) > 1 else "") + names[-1]
+
+    if ref["kind"] == "ordinal":
+        n = ref["n"]
+        if n == -1:
+            n = len(rows)
+        if n > len(rows):
+            return ("clarify", f"The previous answer only had {len(rows)} rows. "
+                    f"Which one do you mean: {options()}?", [], [])
+        desc, values, filters = _describe(columns, rows[n - 1], labels)
+        return ("resolved", f'"{ref["text"]}" = {desc}', values, filters)
+
+    # A pointer ("it", "that seller"): unambiguous only for a single-row answer or
+    # a question that asked for one item; a list needs a clarifying question.
+    if len(rows) == 1 or (SINGULAR_QUESTION.search(plain(previous_question))
+                          and not TOP_N.search(plain(previous_question))):
+        desc, values, filters = _describe(columns, rows[0], labels)
+        return ("resolved", f'"{ref["text"]}" = {desc}', values, filters)
+    return ("clarify", f"Which one do you mean: {options()}?", [], [])
+
+
+def previous_year_anchor(message: str, previous_question: str,
+                         first_date, last_date) -> tuple[str, str, list[str], list[str]] | None:
+    """Resolve "the previous year" from the year in the previous question."""
+    if not PREVIOUS_YEAR.search(plain(message)):
+        return None
+    years = sorted({int(y) for y in YEAR.findall(previous_question)})
+    if len(years) == 1:
+        y = years[0] - 1
+        return ("resolved", f'"previous year" = {y}', [str(y)], [f"purchase_year = {y}"])
+    if years:
+        return ("clarify", f"Previous to which year: {' or '.join(map(str, years))}?", [], [])
+    return ("clarify", "Which year should I use? The previous question covered all the data "
+                       f"({first_date} to {last_date}).", [], [])
+
+
+# ---- result and value grounding ---------------------------------------------------
+
+def empty_period_column(question: str, columns: list[str], rows: list[tuple]) -> str:
+    """Error if a side-by-side comparison has a period column that is empty everywhere
+    (typically: the top N was picked from both periods' rows together)."""
+    q = plain(question)
+    years = set(YEAR.findall(q))
+    if not rows or not (COMPARE.search(q) and len(years) >= 2):
+        return ""
+    period_cols = [i for i, col in enumerate(columns) if any(y in col for y in years)]
+    for i in period_cols:
+        if all(r[i] in (None, 0, 0.0) for r in rows):
+            return (f"The column {columns[i]} is empty in every row: the top N was probably "
+                    "picked from both periods together. Pick the top N for the period the "
+                    "question ranks by in a subquery first, then show each period as its own "
+                    "column.")
+    return ""
+
+
+def wrong_result_shape(question: str, columns: list[str], rows: list[tuple]) -> str:
+    """Results that are never a correct answer, rejected on every attempt:
+    - two period columns of a comparison identical in every row (the per-period
+      condition is missing, so each holds the combined total);
+    - a grouped result where a count column is 1 in every row (it grouped by a
+      unique id such as order_id), unless the user asked for a per-item list."""
+    q = plain(question)
+    years = set(YEAR.findall(q))
+    if rows and COMPARE.search(q) and len(years) >= 2:
+        period_cols = [i for i, col in enumerate(columns) if any(y in col for y in years)]
+        for a, b in [(a, b) for a in period_cols for b in period_cols if a < b]:
+            if all(r[a] == r[b] for r in rows):
+                return (f"{columns[a]} and {columns[b]} are identical in every row, so the "
+                        "year condition is missing. Compute each column with its own period, "
+                        "e.g. SUM(CASE WHEN purchase_year = 2017 THEN revenue END) AS revenue_2017.")
+    if len(rows) >= 5 and not re.search(r"\b(list|each|every|per order|individual)\b", q):
+        for i, col in enumerate(columns):
+            values = [r[i] for r in rows]
+            if COUNT_COLUMN.search(col.lower()) and all(v == 1 for v in values):
+                return ("Every group has exactly one row, so the query groups by a unique id "
+                        "(such as order_id). Remove it from GROUP BY to aggregate across rows; "
+                        "for one overall number, use no GROUP BY at all.")
+    return ""
+
+
+COUNT_COLUMN = re.compile(r"(^|_)(orders?|count|n|reviews?|items?)$")
+
+# Text columns whose filter values can be checked against the real data.
+VALUE_COLUMNS = ("category", "customer_state", "seller_state", "customer_city", "seller_city",
+                 "order_status", "payment_type", "delivery_status")
+LITERAL_FILTER = re.compile(
+    r"\b(?:\w+\.)?(" + "|".join(VALUE_COLUMNS) + r")\s*(=|in\s*\()\s*('[^)]*)", re.I)
+
+
+def unknown_values(sql: str, known: dict[str, set[str]]) -> str:
+    """Error if the SQL filters a text column on a value that does not exist,
+    suggesting the closest real value (e.g. 'Toys' -> 'toys')."""
+    import difflib
+    for col, op, rest in LITERAL_FILTER.findall(sql):
+        values = known.get(col.lower())
+        if not values:
+            continue
+        # "= 'x'" has one value; "IN ('x', 'y')" can have several.
+        literals = re.findall(r"'([^']*)'", rest) if op.strip() != "=" else re.findall(r"^'([^']*)'", rest)
+        lower = {v.lower(): v for v in values}
+        for value in literals:
+            if value in values:
+                continue
+            key = value.lower() if value.lower() in lower else next(
+                iter(difflib.get_close_matches(value.lower(), lower, n=1, cutoff=0.75)), None)
+            hint = f" Did you mean '{lower[key]}'?" if key else ""
+            return (f"'{value}' is not a value of {col} in the data.{hint} Use the exact "
+                    "value as stored (lowercase, English category names, two-letter states).")
+    return ""
