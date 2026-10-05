@@ -1,9 +1,13 @@
 """Read-only access to the Olist DuckDB database, with guardrails."""
+import os
 import re
+from pathlib import Path
 
 import duckdb
 
-DB_PATH = "data/olist.duckdb"
+# Resolved from this file, so the agent runs from any folder. OLIST_DB points it
+# at another database (e.g. one built from a variant of the dataset).
+DB_PATH = os.getenv("OLIST_DB", str(Path(__file__).resolve().parent / "data" / "olist.duckdb"))
 MAX_ROWS = 50  # never hand the model (or the user) more than this many rows
 
 # Defense in depth: the connection is already read-only, but we also reject
@@ -15,15 +19,33 @@ FORBIDDEN = re.compile(
 )
 
 
+# Views the agent queries; a database built by an older load_data.py lacks some.
+REQUIRED_VIEWS = ("sales", "order_facts", "payments")
+
+
 class QueryError(Exception):
     """Raised when SQL is rejected or fails to run."""
 
 
+class DatabaseError(Exception):
+    """Raised when the database is missing or out of date (message says how to fix it)."""
+
+
 def connect():
+    if not os.path.exists(DB_PATH):
+        raise DatabaseError(f"Database not found at {DB_PATH}. Build it with: python load_data.py "
+                            "(the Olist CSVs must be in data/; see the README).")
     # enable_external_access=False blocks reading any file other than the
     # database itself (read_text, glob, SELECT * FROM 'file.csv', ...).
-    return duckdb.connect(DB_PATH, read_only=True,
-                          config={"enable_external_access": False})
+    con = duckdb.connect(DB_PATH, read_only=True, config={"enable_external_access": False})
+    present = {name for (name,) in con.execute(
+        "SELECT table_name FROM information_schema.tables").fetchall()}
+    missing = [v for v in REQUIRED_VIEWS if v not in present]
+    if missing:
+        con.close()
+        raise DatabaseError(f"The database is missing {', '.join(missing)} (built by an older "
+                            "version). Rebuild it with: python load_data.py")
+    return con
 
 
 def run_sql(con, sql: str) -> dict:

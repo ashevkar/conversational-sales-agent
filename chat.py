@@ -1,14 +1,22 @@
 """Terminal chat for the Olist sales analytics agent."""
+import sys
 import time
 
 from agent import Agent
+from db import DatabaseError
+from llm import BASE_URL, MODEL, LLMError, check_server
 
 HELP = "Ask about Olist sales in plain English. Commands: 'reset' (new conversation), 'quit'."
 
 
 def main():
     print("Loading database and schema...")
-    agent = Agent()
+    try:
+        agent = Agent()
+        check_server()
+    except (DatabaseError, LLMError) as e:
+        sys.exit(f"Cannot start: {e}")
+    print(f"Model: {MODEL} at {BASE_URL}")
     print(HELP)
 
     while True:
@@ -27,7 +35,12 @@ def main():
             continue
 
         start = time.time()
-        reply = agent.ask(q)
+        try:
+            reply = agent.ask(q)
+        except LLMError as e:
+            # Keep the chat open: the model server may come back.
+            print(f"\nAgent: {e}")
+            continue
 
         if reply.question and reply.question != q:
             print(f"\n(Interpreted as: {reply.question})")

@@ -3,12 +3,15 @@
 Also creates cleaned views that encode the data-quality decisions
 documented in DESIGN.md, so the model doesn't have to re-derive them.
 """
+import os
 from pathlib import Path
 
 import duckdb
 
-DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "olist.duckdb"
+# Resolved from this file, so it runs from any folder. OLIST_DATA_DIR / OLIST_DB
+# point it at other CSVs or another database file (e.g. a variant dataset).
+DATA_DIR = Path(os.getenv("OLIST_DATA_DIR", Path(__file__).resolve().parent / "data"))
+DB_PATH = Path(os.getenv("OLIST_DB", DATA_DIR / "olist.duckdb"))
 
 # Short table names are easier for a small model to use correctly.
 TABLES = {

@@ -4,6 +4,8 @@ Findings feed the assumptions documented in DESIGN.md.
 """
 import duckdb
 
+from db import DB_PATH
+
 CHECKS = [
     ("Order status counts",
      "SELECT order_status, COUNT(*) AS n FROM orders GROUP BY 1 ORDER BY n DESC"),
@@ -64,7 +66,7 @@ CHECKS = [
 
 
 def main():
-    con = duckdb.connect("data/olist.duckdb", read_only=True)
+    con = duckdb.connect(DB_PATH, read_only=True)
     for title, sql in CHECKS:
         print(f"\n=== {title} ===")
         con.sql(sql).show()
