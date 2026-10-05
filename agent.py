@@ -8,7 +8,9 @@ Per turn:
      - Otherwise an LLM rewrite carries over filters, periods and groupings.
   2. Generate: the model answers the standalone question with SQL, CLARIFY,
      or CANNOT. SQL generation is stateless (no chat history).
-  3. Validate + run: guardrails reject raw tables, duplicate-row results and
+  3. Validate + run: guardrails (checks.py) reject raw tables, joins that
+     double count, sellers grouped by state, comparisons not side by side,
+     top-N breakdowns that LIMIT the wrong rows, suspicious duplicate rows and
      repeated clarifications; a clarifying question when the measure is
      already given, or a refusal for something the data has, is sent back
      once (checks.py). Errors are fed back up to MAX_SQL_ATTEMPTS.
@@ -22,7 +24,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
-from checks import cannot_error, clarify_error, outside_coverage, small_talk_reply
+from checks import (cannot_error, check_sql, clarify_error, duplicates_suspicious,
+                    outside_coverage, repeated_measures, small_talk_reply)
 from db import QueryError, connect, format_table, run_sql
 from llm import chat
 from prompts import build_system_prompt, relative_periods
@@ -32,12 +35,6 @@ HISTORY_TURNS = 6  # question/reply pairs kept for the rewrite step
 
 SQL_BLOCK = re.compile(r"```(?:sql)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
 TAGGED = re.compile(r"^\s*(CLARIFY|CANNOT)\s*:\s*(.+)", re.DOTALL | re.IGNORECASE | re.MULTILINE)
-
-# Raw tables that the cleaned views replace. Querying them bypasses the
-# data-quality rules (e.g. joining customers on customer_unique_id fans out).
-RAW_TABLES = {"customers", "products", "sellers", "order_items",
-              "category_translation", "reviews"}
-TABLE_REF = re.compile(r"\b(?:from|join)\s+([a-z_][a-z0-9_]*)", re.IGNORECASE)
 
 # Replies to a clarifying question that don't actually pick an option.
 NON_ANSWERS = {"yes", "no", "ok", "okay", "sure", "y", "n", "yep", "nope", "k", "fine"}
@@ -114,9 +111,11 @@ class Reply:
 
 def parse(raw: str) -> tuple[str, str]:
     """Classify a model reply as ('sql'|'clarify'|'cannot'|'none', payload)."""
-    block = SQL_BLOCK.search(raw)
-    if block:
-        return "sql", block.group(1).strip()
+    blocks = SQL_BLOCK.findall(raw)
+    if blocks:
+        # A reply can hold a draft and then a corrected query ("Wait, let me
+        # fix it..."): the last block is the model's final answer.
+        return "sql", blocks[-1].strip()
     tagged = TAGGED.search(raw)
     if tagged:
         return tagged.group(1).lower(), tagged.group(2).strip()
@@ -127,21 +126,6 @@ def parse(raw: str) -> tuple[str, str]:
     if first and first[0].lower() in ("select", "with"):
         return "sql", stripped
     return "none", raw
-
-
-def check_sql(sql: str) -> str:
-    """Return an error message if the SQL breaks a guardrail, else ''."""
-    used = {t.lower() for t in TABLE_REF.findall(sql)}
-    raw = sorted(used & RAW_TABLES)
-    if raw:
-        return (f"Do not use the raw table(s) {', '.join(raw)}. Use the sales view "
-                "(it already has customer, seller and category columns) or order_facts "
-                "(one row per order, with delivery, payment and review columns).")
-    if "sales" in used and "payments" in used:
-        return ("Do not join sales with payments: an order with several items and several "
-                "payments multiplies rows and inflates totals. For payment questions use "
-                "payments joined to order_facts (for dates and status) only.")
-    return ""
 
 
 def _numbers(text: str) -> set[float]:
@@ -310,6 +294,8 @@ class Agent:
         # A clarifying question or refusal that the checks doubt is sent back
         # once; if the model insists, its decision stands.
         clarify_checked = cannot_checked = False
+        duplicates_checked = False  # duplicate rows are questioned at most once
+        repeats_checked = False     # so are measures repeated across groups
 
         for attempt in range(1, MAX_SQL_ATTEMPTS + 1):
             raw = chat(messages)
@@ -331,7 +317,7 @@ class Agent:
             elif kind == "none":
                 last_error = "Your reply was not in the SQL / CLARIFY / CANNOT format."
             else:  # sql
-                last_error = check_sql(payload)
+                last_error = check_sql(payload, question)
                 if not last_error:
                     try:
                         result = run_sql(self.con, payload)
@@ -339,9 +325,19 @@ class Agent:
                         last_error = str(e)[:500]
                     else:
                         rows = result["rows"]
-                        if len({repr(r) for r in rows}) < len(rows):
+                        if (not duplicates_checked and duplicates_suspicious(payload)
+                                and len({repr(r) for r in rows}) < len(rows)):
+                            duplicates_checked = True
                             last_error = ("The result has duplicate rows, which usually "
                                           "means an unnecessary join. Remove it.")
+                        elif not repeats_checked and repeated_measures(payload, rows):
+                            repeats_checked = True
+                            last_error = ("Several groups show exactly the same values: the "
+                                          "breakdown column comes from a joined list of groups "
+                                          "that is matched on too few keys. Take the breakdown "
+                                          "column (e.g. customer_state) directly from the table "
+                                          "you sum, e.g. sales.customer_state, and do not join "
+                                          "a separate DISTINCT list of groups.")
                         else:
                             table = format_table(result)
                             text = self._summarize(question, result["sql"], table)

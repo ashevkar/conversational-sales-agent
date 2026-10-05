@@ -8,7 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from checks import cannot_error, clarify_error, outside_coverage, small_talk_reply  # noqa: E402
+from checks import (cannot_error, check_sql, clarify_error, duplicates_suspicious,  # noqa: E402
+                    outside_coverage, repeated_measures, small_talk_reply)
 
 FIRST, LAST = date(2016, 9, 4), date(2018, 9, 3)
 
@@ -64,6 +65,112 @@ def test_cannot_rechecked_when_data_exists():
               "Which sellers have the most orders?"]:
         assert cannot_error(q).startswith("This looks answerable"), q
     assert "payment_type" in cannot_error("Total amount paid by payment type")
+
+
+# ---- SQL structure: real queries the model wrote in earlier eval runs ----------
+
+FANOUT_AVG_PAID = """SELECT f.customer_state, ROUND(AVG(f.payment_total), 2) AS avg_amount_paid
+FROM order_facts f JOIN sales s ON f.order_id = s.order_id
+WHERE f.is_sale = TRUE GROUP BY f.customer_state ORDER BY avg_amount_paid DESC"""
+
+REVIEWS_BY_SELLER_STATE = """SELECT s.seller_state, ROUND(AVG(f.review_score), 2) AS avg_score,
+       COUNT(f.review_score) AS orders
+FROM (SELECT DISTINCT order_id, seller_state FROM sales) s
+JOIN order_facts f ON f.order_id = s.order_id
+GROUP BY s.seller_state ORDER BY avg_score DESC"""
+
+CHAIN_TURN3_OK = """WITH top_categories AS (
+    SELECT category FROM sales WHERE purchase_year = 2017
+    GROUP BY category ORDER BY SUM(revenue) DESC LIMIT 5)
+SELECT c.category, s.customer_state, ROUND(SUM(s.revenue), 2) AS revenue
+FROM sales s JOIN top_categories c ON s.category = c.category
+JOIN order_facts f ON s.order_id = f.order_id
+WHERE s.purchase_year = 2017 AND f.is_delivered = true
+GROUP BY c.category, s.customer_state ORDER BY revenue DESC"""
+
+SELLERS_BY_STATE = """SELECT seller_state, COUNT(DISTINCT order_id) AS orders
+FROM sales GROUP BY seller_state ORDER BY orders DESC"""
+
+SELLERS_BY_ID = """SELECT seller_id, seller_state, COUNT(DISTINCT order_id) AS orders
+FROM sales GROUP BY seller_id, seller_state ORDER BY orders DESC LIMIT 10"""
+
+CHAIN_TURN4_ROWS = """SELECT category, customer_state, purchase_year, ROUND(SUM(revenue), 2) AS revenue
+FROM sales WHERE is_delivered AND purchase_year IN (2017, 2018)
+GROUP BY category, customer_state, purchase_year ORDER BY category, customer_state, purchase_year"""
+
+CHAIN_TURN4_COLUMNS = """SELECT category, customer_state,
+       ROUND(SUM(CASE WHEN purchase_year = 2017 THEN revenue END), 2) AS revenue_2017,
+       ROUND(SUM(CASE WHEN purchase_year = 2018 THEN revenue END), 2) AS revenue_2018
+FROM sales WHERE is_delivered AND purchase_year IN (2017, 2018)
+GROUP BY category, customer_state ORDER BY revenue_2018 DESC"""
+
+TOP3_LIMIT_WRONG = """SELECT category, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
+FROM sales WHERE purchase_year = 2018
+GROUP BY category, purchase_quarter ORDER BY category, revenue DESC LIMIT 3"""
+
+TOP3_SUBQUERY_OK = """SELECT category, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
+FROM sales WHERE purchase_year = 2018 AND category IN (
+    SELECT category FROM sales WHERE purchase_year = 2018
+    GROUP BY category ORDER BY SUM(revenue) DESC LIMIT 3)
+GROUP BY category, purchase_quarter ORDER BY category, purchase_quarter"""
+
+ITEM_PRICES = "SELECT order_item_id, revenue FROM sales WHERE order_id = 'abc'"
+
+
+def test_existing_guardrails_unchanged():
+    assert "raw table" in check_sql("SELECT * FROM order_items")
+    assert "Do not join sales with payments" in check_sql(
+        "SELECT payment_type, SUM(revenue) FROM sales JOIN payments USING (order_id) GROUP BY 1")
+
+
+def test_fanout_join_rejected():
+    q = "Average amount paid per order by customer state, excluding canceled orders"
+    assert "repeats each order" in check_sql(FANOUT_AVG_PAID, q)
+    assert check_sql(REVIEWS_BY_SELLER_STATE, "Average review score by seller state") == ""
+    assert check_sql(CHAIN_TURN3_OK, "Top 5 categories in 2017 by customer state, delivered only") == ""
+
+
+def test_seller_grouping():
+    q = "Who are our best sellers? (Clarification: most orders)"
+    assert "individual sellers" in check_sql(SELLERS_BY_STATE, q)
+    assert check_sql(SELLERS_BY_ID, q) == ""
+    assert check_sql(SELLERS_BY_STATE, "Number of orders by seller state") == ""
+
+
+def test_side_by_side():
+    q = ("Compare the top 5 product categories by revenue in 2017, broken down by customer "
+         "state and only counting delivered orders, with 2018 compared side by side.")
+    assert "side by side" in check_sql(CHAIN_TURN4_ROWS, q)
+    assert check_sql(CHAIN_TURN4_COLUMNS, q) == ""
+    assert check_sql(CHAIN_TURN4_ROWS, "Revenue by category, state and year") == ""
+
+
+def test_top_n_breakdown():
+    q = "Top 3 categories by revenue in 2018, broken down by quarter"
+    assert "subquery" in check_sql(TOP3_LIMIT_WRONG, q)
+    assert check_sql(TOP3_SUBQUERY_OK, q) == ""
+    assert check_sql(TOP3_LIMIT_WRONG, "Top 3 category-quarter combinations by revenue in 2018") == ""
+
+
+def test_duplicates_only_suspicious_with_joins():
+    assert not duplicates_suspicious(ITEM_PRICES)
+    assert not duplicates_suspicious(CHAIN_TURN3_OK)          # has GROUP BY
+    assert duplicates_suspicious("SELECT s.category FROM sales s JOIN order_facts f USING (order_id)")
+
+
+
+def test_repeated_measures():
+    grouped = "SELECT category, customer_state, SUM(a), SUM(b) FROM sales GROUP BY 1, 2"
+    # Chain turn 4 bug: every state got the category's national totals.
+    wrong = [("health_beauty", st, 473833.0, 755724.5) for st in ("RN", "AC", "PR", "RR")]
+    right = [("bed_bath_table", "SP", 204224.73, 267983.44), ("bed_bath_table", "RJ", 77829.48, 90000.1),
+             ("watches_gifts", "SP", 175097.73, 200000.0)]
+    assert repeated_measures(grouped, wrong)
+    assert not repeated_measures(grouped, right)
+    # Small groups sharing one average are normal; so are identical row-level prices.
+    assert not repeated_measures("SELECT category, AVG(s), COUNT(*) FROM t GROUP BY 1",
+                                 [("a", 5.0, 1), ("b", 5.0, 2), ("c", 5.0, 1)])
+    assert not repeated_measures(ITEM_PRICES, [(1, 21.33), (2, 21.33), (3, 21.33)])
 
 
 if __name__ == "__main__":
