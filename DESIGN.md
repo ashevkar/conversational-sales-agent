@@ -90,13 +90,12 @@ Limitation by design: only the latest answer is remembered, and references code 
 
 25 questions in `eval/cases.py`: grounding (7), multi-turn including the assignment's 4-turn chain checked at every turn (3), clarify (3), cannot (4), a per-order question with no prompt example (1), and references (7). Expected values come from hand-written SQL; checks also verify the interpreted question and, for references, the SQL filter, so a right number in a wrong query fails. `python eval/run_eval.py` runs them; `eval/report.py` writes [eval/RESULTS.md](eval/RESULTS.md).
 
-**Result: 24/25** on llama.cpp (Apple M1, 8 GB; 3.2 LLM calls and about 20–35 s per question, depending on machine load). The failure is a safe refusal (below). A separate regression set of 9 older bug cases runs with `--regression`, and 34 unit tests cover every code check without needing the model.
+**Result: 25/25** on llama.cpp (Apple M1, 8 GB; about 3 LLM calls and 20–35 s per question, depending on machine load). Earlier runs passed 24, each failing a different hard case; each failure became a code check. A separate regression set of 9 older bug cases runs with `--regression`, and 35 unit tests cover every code check without needing the model.
 
 ## 8. Limitations
 
-- **"The second one" with an average review score:** the reference resolves correctly, but the model can't build the filtered query in 4 attempts, so the agent refuses.
 - **Compound top-N breakdowns** ("top 5 categories, broken down by state") are at the edge of the 4B model: when it can't write the top-N subquery within 4 attempts, the agent refuses. Before the top-N check it could silently return every category instead.
-- **Run-to-run variation** on long multi-call conversations: earlier full runs ranged from 32 to 34 of 34.
+- **Run-to-run variation** on long multi-call conversations: full runs have ranged from 24 to 25 of 25 (and 32 to 34 of an earlier 34-case set). When the model can't write a query that passes the checks in 4 attempts, the agent refuses rather than guessing.
 - **Speed:** 3 to 60 s per question on an 8 GB laptop; follow-ups cost 2 extra LLM calls (classify and rewrite).
 - **Coverage of the checks** is limited to mistakes seen so far; a new kind of wrong join can still pass, which is why the SQL and table are always shown.
 - **English questions** only.

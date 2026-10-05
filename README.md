@@ -2,7 +2,7 @@
 
 Ask questions about the [Olist Brazilian e-commerce dataset](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) in plain English, in a multi-turn conversation. The agent runs **fully locally**: a 4B open-weight model (Qwen 3.5 4B) writes SQL, DuckDB runs it read-only, and every answer shows the SQL and result table it came from. It asks a clarifying question when a request is genuinely ambiguous, and says so when the data can't answer.
 
-**Eval: 24/25** on an 8 GB Apple M1 ([eval/RESULTS.md](eval/RESULTS.md)). How it works: [DESIGN.md](DESIGN.md). Everything tried along the way: [docs/DEVLOG.md](docs/DEVLOG.md).
+**Eval: 25/25** on an 8 GB Apple M1 ([eval/RESULTS.md](eval/RESULTS.md)). How it works: [DESIGN.md](DESIGN.md). Everything tried along the way: [docs/DEVLOG.md](docs/DEVLOG.md).
 
 ```
 You: What were our top 5 product categories by revenue in 2017?
@@ -132,22 +132,12 @@ conversational-sales-agent/
 ```bash
 python eval/run_eval.py --tag mine      # the 25 eval questions, about 10–15 minutes
 python eval/report.py eval/results/mine.json   # writes eval/RESULTS.md
-for t in tests/test_*.py; do python "$t"; done # 34 unit tests of the code checks, no model needed
+for t in tests/test_*.py; do python "$t"; done # 35 unit tests of the code checks, no model needed
 ```
 
 `python eval/run_eval.py --regression` runs a separate set of 9 older bug cases. Expected values were computed with hand-written SQL against this dataset; on a different dataset the eval's numbers won't match, but the agent itself hardcodes none of them.
 
-**The one failure ('the second one').** The full exchange from the final run:
-
-```
-You: Top 5 categories by revenue in 2017
-Agent: bed_bath_table (revenue 497,970.94); watches_gifts (revenue 486,519.02); health_beauty (revenue 481,142.73); sports_leisure (revenue 447,546.59); computers_accessories (revenue 400,490.61).
-You: What was the average review score of the second one?
-(Interpreted as: What was the average review score of watches_gifts in 2017?)
-Agent: Sorry, I couldn't build a working query for that, so I won't guess. Last error: Every group has exactly one row, so the query groups by a unique id (such as order_id). Remove it from GROUP BY to aggregate across rows; for one overall number, use no GROUP BY at all.
-```
-
-The reference resolved correctly ("the second one" → `watches_gifts`), but none of the model's 4 SQL attempts passed the code checks; the last one grouped by a unique id, so every group had one row. The agent refuses instead of returning a wrong number. The eval marks it failed because no SQL filtering on `watches_gifts` was produced. The eval runner keeps only the first 80 characters of a reply in its failure reason, so the full reply was added to [eval/RESULTS.md](eval/RESULTS.md) by hand.
+**Run-to-run variation.** The final run passed all 25. Earlier runs of the same set passed 24, each time failing a different hard case (a follow-up reference, an average without its order count); each failure led to a code check that now catches it. A single run is not a guarantee: long multi-call conversations can still vary by a case.
 
 
 ## Troubleshooting
