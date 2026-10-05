@@ -35,7 +35,7 @@ llama-server -hf lmstudio-community/Qwen3.5-4B-GGUF:Q4_K_M --no-mmproj \
 **2. Python environment.**
 
 ```bash
-git clone <this repo> && cd conversational-sales-agent
+git clone https://github.com/ashevkar/conversational-sales-agent.git && cd conversational-sales-agent
 python3.12 -m venv .venv && source .venv/bin/activate      # or: uv venv --python 3.12
 pip install -r requirements.txt
 ```
