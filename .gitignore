@@ -4,3 +4,10 @@ data/
 *.duckdb
 __pycache__/
 .DS_Store
+
+# Eval: keep only the final runs (eval/RESULTS.md summarises them)
+eval/results/*
+!eval/results/final.json
+
+# Assignment text (not part of the submission)
+file.md

@@ -16,6 +16,11 @@ a known bug; `category` groups the results:
   references  follow-ups that point at an item of the previous ANSWER ("it",
               "that seller", "the second one") or at "the previous year"
 
+`eval: True` marks the 25 cases of the evaluation set (the assignment asks for
+about 15-25). The remaining cases are a separate regression set for specific
+past bugs and reference variants; they are not part of the eval and only run
+with `run_eval.py --regression`.
+
 Check types:
   table_has     every item must appear in the result table ("a|b" = either form)
   kind          reply kind must match ("answer", "clarify", "cannot"; or a list)
@@ -35,10 +40,11 @@ Several checks can be combined; all must pass.
 TOP5_2017 = ["bed_bath_table", "watches_gifts", "health_beauty", "sports_leisure",
              "computers_accessories"]
 
-CASES = [
+_ALL = [
     # ---- grounding -------------------------------------------------------
     {
         "name": "top 5 categories 2017",
+        "eval": True,
         "category": "grounding",
         "turns": ["Top 5 categories by revenue in 2017"],
         "checks": [{"type": "table_has",
@@ -46,6 +52,7 @@ CASES = [
     },
     {
         "name": "late vs on-time reviews",
+        "eval": True,
         "category": "grounding",
         # Late = delivered after the estimated DATE (delivery on the day is on time).
         "turns": ["Average review score for late deliveries vs on-time deliveries"],
@@ -53,6 +60,7 @@ CASES = [
     },
     {
         "name": "amount paid by payment type",
+        "eval": True,
         "category": "grounding",
         "turns": ["Total amount paid by payment type"],
         "checks": [{"type": "table_has",
@@ -73,6 +81,7 @@ CASES = [
     },
     {
         "name": "worst-reviewed categories",
+        "eval": True,
         "category": "grounding",
         # "Worst reviews" states the measure, so no clarifying question. Small
         # groups must stay in (with their order counts), not be filtered out.
@@ -81,6 +90,7 @@ CASES = [
     },
     {
         "name": "Sao Paulo last quarter",
+        "eval": True,
         "category": "grounding",
         # Decisions: "São Paulo" = the state (SP) unless "city" is said; "last
         # quarter" = the last complete quarter in the data (2018 Q2; Q3 stops on
@@ -99,6 +109,7 @@ CASES = [
     },
     {
         "name": "summary names the real peak month",
+        "eval": True,
         "category": "grounding",
         "issue": "#12",
         "turns": ["Monthly revenue in SP for 2017"],
@@ -108,6 +119,7 @@ CASES = [
     },
     {
         "name": "row-level result with identical rows",
+        "eval": True,
         "category": "grounding",
         "issue": "#4",
         # This order has 3 line items of the same product at the same price.
@@ -119,6 +131,7 @@ CASES = [
     # ---- multi-turn ------------------------------------------------------
     {
         "name": "assignment chain: top 5 -> state -> delivered -> 2018",
+        "eval": True,
         "category": "multi-turn",
         # The example conversation from the assignment, checked at every turn.
         # Turns 2-4 keep 2017's top 5 categories; turn 4 compares delivered
@@ -139,6 +152,7 @@ CASES = [
     },
     {
         "name": "follow-up keeps the top 3",
+        "eval": True,
         "category": "multi-turn",
         "issue": "#9",
         "turns": ["Top 3 categories by revenue in 2018", "break that down by quarter"],
@@ -147,6 +161,7 @@ CASES = [
     },
     {
         "name": "new question after a clarifying question",
+        "eval": True,
         "category": "multi-turn",
         # The user ignores the clarifying question and asks something else.
         "turns": ["Who are our best sellers?", "How many orders were canceled in 2017?"],
@@ -155,12 +170,14 @@ CASES = [
     # ---- clarify ---------------------------------------------------------
     {
         "name": "best sellers asks to clarify",
+        "eval": True,
         "category": "clarify",
         "turns": ["Who are our best sellers?"],
         "checks": [{"type": "kind", "kind": "clarify"}],
     },
     {
         "name": "clarified best sellers by revenue",
+        "eval": True,
         "category": "clarify",
         "issue": "#8",
         # The seller id must be there: the top seller is also the only seller in
@@ -176,6 +193,7 @@ CASES = [
     },
     {
         "name": "'yes' to a clarifying question asks again",
+        "eval": True,
         "category": "clarify",
         "turns": ["Who are our best sellers?", "yes"],
         "checks": [{"type": "kind", "kind": "clarify"}],
@@ -183,24 +201,28 @@ CASES = [
     # ---- cannot ----------------------------------------------------------
     {
         "name": "profit margin is out of scope",
+        "eval": True,
         "category": "cannot",
         "turns": ["What was our profit margin last year?"],
         "checks": [{"type": "kind", "kind": "cannot"}],
     },
     {
         "name": "customer age is not in the data",
+        "eval": True,
         "category": "cannot",
         "turns": ["What is the age distribution of our customers?"],
         "checks": [{"type": "kind", "kind": "cannot"}],
     },
     {
         "name": "year outside the data",
+        "eval": True,
         "category": "cannot",
         "turns": ["What was our revenue in 2020?"],
         "checks": [{"type": "no_data"}],
     },
     {
         "name": "not a data question",
+        "eval": True,
         "category": "cannot",
         "turns": ["hello"],
         "checks": [{"type": "kind", "kind": "cannot"}],
@@ -210,6 +232,7 @@ CASES = [
     # order_facts view generalises beyond the benchmark questions.
     {
         "name": "average delivery days by state",
+        "eval": True,
         "category": "held-out",
         # Whole days (date diff) or fractional days are both accepted.
         "turns": ["Average delivery time in days by customer state"],
@@ -233,6 +256,7 @@ CASES = [
     # name it, and must not pick up anything the user did not point at.
     {
         "name": "'it' = the item the previous question asked for",
+        "eval": True,
         "category": "references",
         "turns": ["Which category had the worst reviews?",
                   {"ask": "How many orders did it have?",
@@ -242,6 +266,7 @@ CASES = [
     },
     {
         "name": "'that seller'",
+        "eval": True,
         "category": "references",
         "turns": ["Which seller has the highest revenue?",
                   {"ask": "How many orders did that seller have?",
@@ -260,6 +285,7 @@ CASES = [
     },
     {
         "name": "'that category' after a list asks which one",
+        "eval": True,
         "category": "references",
         # Five categories were listed, so "that category" is ambiguous.
         "turns": ["Top 5 categories by revenue in 2017",
@@ -268,6 +294,7 @@ CASES = [
     },
     {
         "name": "'the second one'",
+        "eval": True,
         "category": "references",
         # 4.07 over all data, 4.14 if the 2017 period is carried over.
         "turns": ["Top 5 categories by revenue in 2017",
@@ -288,6 +315,7 @@ CASES = [
     },
     {
         "name": "'previous year' with no anchor asks, then answers",
+        "eval": True,
         "category": "references",
         "turns": ["Which category had the worst reviews?",
                   {"ask": "What about the previous year?",
@@ -297,6 +325,7 @@ CASES = [
     },
     {
         "name": "unrelated new question does not inherit the previous answer",
+        "eval": True,
         "category": "references",
         "turns": ["Which seller has the highest revenue?",
                   {"ask": "How many orders were canceled in 2017?",
@@ -317,6 +346,7 @@ CASES = [
     },
     {
         "name": "naming a different item does not leak the listed ones",
+        "eval": True,
         "category": "references",
         "turns": ["Top 5 categories by revenue in 2017",
                   {"ask": "What was revenue for toys in 2017?",
@@ -325,3 +355,7 @@ CASES = [
                               {"type": "table_has", "items": ["305,991.37"]}]}],
     },
 ]
+
+# The evaluation set (25 cases) and the separate regression set.
+CASES = [c for c in _ALL if c.get("eval")]
+REGRESSION_CASES = [c for c in _ALL if not c.get("eval")]

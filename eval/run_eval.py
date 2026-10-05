@@ -1,14 +1,19 @@
 """Run the eval cases against the agent and report accuracy, time and LLM calls.
 
 Usage (from the repo root, with the model server running):
-  python eval/run_eval.py                 # all cases
-  python eval/run_eval.py --only seller   # cases whose name contains "seller"
+  python eval/run_eval.py                 # the 25 eval cases
+  python eval/run_eval.py --only seller   # eval cases whose name contains "seller"
+  python eval/run_eval.py --tag final     # name the results file
+  python eval/run_eval.py --regression    # the separate regression set (not the eval)
 
 The model is whatever llm.py points at (LLM_BASE_URL / LLM_MODEL).
-Results are written to eval/results/<model>_<timestamp>.json.
+Results are written to eval/results/<tag or model_timestamp>.json; summarise
+one or more result files with eval/report.py.
 """
 import argparse
 import json
+import platform
+import subprocess
 import re
 import sys
 import time
@@ -24,7 +29,7 @@ os.chdir(ROOT)  # db.py opens data/olist.duckdb relative to the working director
 
 import agent as agent_module  # noqa: E402
 import llm  # noqa: E402
-from cases import CASES  # noqa: E402
+from cases import CASES, REGRESSION_CASES  # noqa: E402
 
 SUPERLATIVE = re.compile(r"\b(highest|peak|peaked|largest|maximum|max|top|best|most)\b", re.I)
 NUMBER = re.compile(r"\d[\d,]*\.\d+|\d{1,3}(?:,\d{3})+")
@@ -126,14 +131,30 @@ def run_check(check: dict, reply) -> str:
     return f"unknown check type {kind}"
 
 
+def hardware() -> str:
+    """CPU and RAM, for the results report."""
+    try:
+        cpu = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True,
+                             text=True).stdout.strip()
+        ram = int(subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True,
+                                 text=True).stdout) / 2**30
+        return f"{cpu}, {ram:.0f} GB RAM, {platform.system()} {platform.release()}"
+    except (OSError, ValueError):
+        return f"{platform.machine()}, {platform.system()} {platform.release()}"
+
+
 def main():
     global _calls
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", help="run only cases whose name contains this text")
     parser.add_argument("--category", help="run only cases in this category")
+    parser.add_argument("--regression", action="store_true",
+                        help="run the regression set instead of the eval set")
+    parser.add_argument("--tag", help="name for the results file (default: model_timestamp)")
     args = parser.parse_args()
 
-    cases = [c for c in CASES if (not args.only or args.only.lower() in c["name"].lower())
+    pool = REGRESSION_CASES if args.regression else CASES
+    cases = [c for c in pool if (not args.only or args.only.lower() in c["name"].lower())
              and (not args.category or c["category"] == args.category)]
     print(f"Model: {llm.MODEL} at {llm.BASE_URL}  ({len(cases)} cases)\n")
 
@@ -189,9 +210,11 @@ def main():
 
     out_dir = ROOT / "eval" / "results"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{llm.MODEL.replace(':', '_').replace('/', '_')}_{time.strftime('%Y%m%d-%H%M%S')}.json"
-    out.write_text(json.dumps({"model": llm.MODEL, "passed": passed, "total": len(results),
-                               "results": results}, indent=1))
+    name = args.tag or f"{llm.MODEL.replace(':', '_').replace('/', '_')}_{time.strftime('%Y%m%d-%H%M%S')}"
+    out = out_dir / f"{name}.json"
+    out.write_text(json.dumps({"model": llm.MODEL, "base_url": llm.BASE_URL,
+                               "started": time.strftime("%Y-%m-%d %H:%M"), "hardware": hardware(),
+                               "passed": passed, "total": len(results), "results": results}, indent=1))
     print(f"Saved {out.relative_to(ROOT)}")
 
 
