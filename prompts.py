@@ -113,24 +113,23 @@ SELECT category, COUNT(*) AS units
 FROM sales
 WHERE purchase_year = 2018
 GROUP BY category
-ORDER BY units DESC; 
+ORDER BY units DESC
 ```
 
-User: What are the top 5 product categories by revenue, broken down by seller state?
+User: Top 3 seller states by revenue in 2018, broken down by quarter
 SQL:
 ```sql
-SELECT category, seller_state, ROUND(SUM(revenue), 2) AS revenue
+SELECT seller_state, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
 FROM sales
-WHERE category IN (
-    SELECT category
-    FROM sales
-    GROUP BY category
-    ORDER BY SUM(revenue) DESC
-    LIMIT 5
-)
-GROUP BY category, seller_state
-ORDER BY category, revenue DESC; 
-
+WHERE purchase_year = 2018
+  AND seller_state IN (
+      SELECT seller_state FROM sales
+      WHERE purchase_year = 2018
+      GROUP BY seller_state
+      ORDER BY SUM(revenue) DESC
+      LIMIT 3)
+GROUP BY seller_state, purchase_quarter
+ORDER BY seller_state, purchase_quarter
 ```
 
 User: What was the average freight for delivered orders in 2017 versus 2018, by customer state?
