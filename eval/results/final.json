@@ -1,7 +1,7 @@
 {
  "model": "qwen3.5-4b",
  "base_url": "http://localhost:8080/v1",
- "started": "2026-10-04 22:39",
+ "started": "2026-10-05 00:11",
  "hardware": "Apple M1, 8 GB RAM, Darwin 25.2.0",
  "passed": 24,
  "total": 25,
@@ -23,7 +23,7 @@
      "reasons": []
     }
    ],
-   "secs": 4.2,
+   "secs": 8.8,
    "llm_calls": 1,
    "kind": "answer",
    "attempts": 1,
@@ -49,7 +49,7 @@
      "reasons": []
     }
    ],
-   "secs": 4.3,
+   "secs": 7.7,
    "llm_calls": 1,
    "kind": "answer",
    "attempts": 1,
@@ -75,7 +75,7 @@
      "reasons": []
     }
    ],
-   "secs": 10.6,
+   "secs": 19.4,
    "llm_calls": 2,
    "kind": "answer",
    "attempts": 2,
@@ -96,18 +96,18 @@
      "kind": "answer",
      "question": "Which categories have the worst reviews?",
      "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales) s\nJOIN order_facts f ON f.order_id = s.order_id\nGROUP BY category\nORDER BY avg_score ASC",
-     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nfashion_underwear_beach                       | 3.93      | 120   \nunknown                                       | 3.93      | 1425  \nfixed_telephony                               | 3.94      | 211   \nhome_construction                             | 3.97      | 487   \nbed_bath_table                                | 3.97      | 9295  \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \nmarket_place                                  | 4.04      | 277   \ncomputers_accessories                         | 4.04      | 6616  \nfurniture_living_room                         | 4.04      | 415   \nart                                           | 4.04      | 199   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nwatches_gifts                                 | 4.07      | 5557  \nchristmas_supplies                            | 4.08      | 125   \nconsoles_games                                | 4.09      | 1044  \nconstruction_tools_construction               | 4.09      | 741   \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \ngarden_tools                                  | 4.14      | 3483  \nfurniture_bedroom                             | 4.14      | 95    \nhome_appliances_2                             | 4.15      | 230   \nhome_appliances                               | 4.16      | 759   \nhousewares                                    | 4.16      | 5808  \ntablets_printing_image                        | 4.16      | 77    \ndrinks                                        | 4.17      | 295   \narts_and_craftmanship                         | 4.17      | 23    \ncomputers                                     | 4.17      | 178   \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nhealth_beauty                                 | 4.19      | 8735  \nindustry_commerce_and_business                | 4.19      | 233   \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
+     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nunknown                                       | 3.93      | 1425  \nfashion_underwear_beach                       | 3.93      | 120   \nfixed_telephony                               | 3.94      | 211   \nhome_construction                             | 3.97      | 487   \nbed_bath_table                                | 3.97      | 9295  \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \ncomputers_accessories                         | 4.04      | 6616  \nmarket_place                                  | 4.04      | 277   \nart                                           | 4.04      | 199   \nfurniture_living_room                         | 4.04      | 415   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nwatches_gifts                                 | 4.07      | 5557  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nchristmas_supplies                            | 4.08      | 125   \nconsoles_games                                | 4.09      | 1044  \nconstruction_tools_construction               | 4.09      | 741   \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \nfurniture_bedroom                             | 4.14      | 95    \ngarden_tools                                  | 4.14      | 3483  \nhome_appliances_2                             | 4.15      | 230   \nhome_appliances                               | 4.16      | 759   \nhousewares                                    | 4.16      | 5808  \ntablets_printing_image                        | 4.16      | 77    \narts_and_craftmanship                         | 4.17      | 23    \ndrinks                                        | 4.17      | 295   \ncomputers                                     | 4.17      | 178   \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nindustry_commerce_and_business                | 4.19      | 233   \nhealth_beauty                                 | 4.19      | 8735  \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
      "text": "The category with the worst reviews is security_and_services, which has an average score of 2.50 based on only 2 orders. This low score is less reliable due to the very small number of orders compared to other categories.",
      "reasons": []
     }
    ],
-   "secs": 16.0,
+   "secs": 32.0,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 2,
    "question": "Which categories have the worst reviews?",
    "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales) s\nJOIN order_facts f ON f.order_id = s.order_id\nGROUP BY category\nORDER BY avg_score ASC",
-   "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nfashion_underwear_beach                       | 3.93      | 120   \nunknown                                       | 3.93      | 1425  \nfixed_telephony                               | 3.94      | 211   \nhome_construction                             | 3.97      | 487   \nbed_bath_table                                | 3.97      | 9295  \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \nmarket_place                                  | 4.04      | 277   \ncomputers_accessories                         | 4.04      | 6616  \nfurniture_living_room                         | 4.04      | 415   \nart                                           | 4.04      | 199   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nwatches_gifts                                 | 4.07      | 5557  \nchristmas_supplies                            | 4.08      | 125   \nconsoles_games                                | 4.09      | 1044  \nconstruction_tools_construction               | 4.09      | 741   \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \ngarden_tools                                  | 4.14      | 3483  \nfurniture_bedroom                             | 4.14      | 95    \nhome_appliances_2                             | 4.15      | 230   \nhome_appliances                               | 4.16      | 759   \nhousewares                                    | 4.16      | 5808  \ntablets_printing_image                        | 4.16      | 77    \ndrinks                                        | 4.17      | 295   \narts_and_craftmanship                         | 4.17      | 23    \ncomputers                                     | 4.17      | 178   \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nhealth_beauty                                 | 4.19      | 8735  \nindustry_commerce_and_business                | 4.19      | 233   \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
+   "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nunknown                                       | 3.93      | 1425  \nfashion_underwear_beach                       | 3.93      | 120   \nfixed_telephony                               | 3.94      | 211   \nhome_construction                             | 3.97      | 487   \nbed_bath_table                                | 3.97      | 9295  \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \ncomputers_accessories                         | 4.04      | 6616  \nmarket_place                                  | 4.04      | 277   \nart                                           | 4.04      | 199   \nfurniture_living_room                         | 4.04      | 415   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nwatches_gifts                                 | 4.07      | 5557  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nchristmas_supplies                            | 4.08      | 125   \nconsoles_games                                | 4.09      | 1044  \nconstruction_tools_construction               | 4.09      | 741   \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \nfurniture_bedroom                             | 4.14      | 95    \ngarden_tools                                  | 4.14      | 3483  \nhome_appliances_2                             | 4.15      | 230   \nhome_appliances                               | 4.16      | 759   \nhousewares                                    | 4.16      | 5808  \ntablets_printing_image                        | 4.16      | 77    \narts_and_craftmanship                         | 4.17      | 23    \ndrinks                                        | 4.17      | 295   \ncomputers                                     | 4.17      | 178   \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nindustry_commerce_and_business                | 4.19      | 233   \nhealth_beauty                                 | 4.19      | 8735  \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
    "text": "The category with the worst reviews is security_and_services, which has an average score of 2.50 based on only 2 orders. This low score is less reliable due to the very small number of orders compared to other categories."
   },
   {
@@ -123,18 +123,18 @@
      "question": "How did S\u00e3o Paulo do last quarter?",
      "sql": "SELECT \n    sp_order_facts.purchase_year,\n    sp_order_facts.purchase_quarter,\n    COUNT(DISTINCT sp_orders.order_id) AS orders,\n    ROUND(SUM(sp_revenue.total_revenue), 2) AS revenue\nFROM (\n    SELECT DISTINCT order_id, purchase_year, purchase_quarter\n    FROM sales\n    WHERE customer_state = 'SP'\n) sp_orders\nJOIN (\n    SELECT order_id, SUM(revenue) AS total_revenue\n    FROM sales\n    WHERE customer_state = 'SP'\n    GROUP BY order_id\n) sp_revenue ON sp_orders.order_id = sp_revenue.order_id\nJOIN (\n    SELECT DISTINCT order_id, purchase_year, purchase_quarter\n    FROM order_facts\n    WHERE customer_state = 'SP'\n) sp_order_facts ON sp_orders.order_id = sp_order_facts.order_id\nWHERE sp_order_facts.purchase_year = 2018 \n  AND sp_order_facts.purchase_quarter = 2\nGROUP BY sp_order_facts.purchase_year, sp_order_facts.purchase_quarter\nORDER BY sp_order_facts.purchase_year, sp_order_facts.purchase_quarter",
      "table": "purchase_year | purchase_quarter | orders | revenue     \n--------------+------------------+--------+-------------\n2018          | 2                | 8984   | 1,173,308.82",
-     "text": "2,018 Q2 (orders 8,984, revenue 1,173,308.82).\nNote: 'last quarter' = Q2 2018, the last complete quarter in the data (latest date 2018-09-03); S\u00e3o Paulo is read as the state (SP); ask about S\u00e3o Paulo city for the city only; 2016 is a partial year (data from 2016-09-04 to 2016-12-23); 2018 is a partial year (data from 2018-01-01 to 2018-09-03).",
+     "text": "2018 Q2 (orders 8,984, revenue 1,173,308.82).\nNote: 'last quarter' = Q2 2018, the last complete quarter in the data (latest date 2018-09-03); S\u00e3o Paulo is read as the state (SP); ask about S\u00e3o Paulo city for the city only; 2016 is a partial year (data from 2016-09-04 to 2016-12-23); 2018 is a partial year (data from 2018-01-01 to 2018-09-03).",
      "reasons": []
     }
    ],
-   "secs": 30.8,
+   "secs": 60.9,
    "llm_calls": 2,
    "kind": "answer",
    "attempts": 2,
    "question": "How did S\u00e3o Paulo do last quarter?",
    "sql": "SELECT \n    sp_order_facts.purchase_year,\n    sp_order_facts.purchase_quarter,\n    COUNT(DISTINCT sp_orders.order_id) AS orders,\n    ROUND(SUM(sp_revenue.total_revenue), 2) AS revenue\nFROM (\n    SELECT DISTINCT order_id, purchase_year, purchase_quarter\n    FROM sales\n    WHERE customer_state = 'SP'\n) sp_orders\nJOIN (\n    SELECT order_id, SUM(revenue) AS total_revenue\n    FROM sales\n    WHERE customer_state = 'SP'\n    GROUP BY order_id\n) sp_revenue ON sp_orders.order_id = sp_revenue.order_id\nJOIN (\n    SELECT DISTINCT order_id, purchase_year, purchase_quarter\n    FROM order_facts\n    WHERE customer_state = 'SP'\n) sp_order_facts ON sp_orders.order_id = sp_order_facts.order_id\nWHERE sp_order_facts.purchase_year = 2018 \n  AND sp_order_facts.purchase_quarter = 2\nGROUP BY sp_order_facts.purchase_year, sp_order_facts.purchase_quarter\nORDER BY sp_order_facts.purchase_year, sp_order_facts.purchase_quarter",
    "table": "purchase_year | purchase_quarter | orders | revenue     \n--------------+------------------+--------+-------------\n2018          | 2                | 8984   | 1,173,308.82",
-   "text": "2,018 Q2 (orders 8,984, revenue 1,173,308.82).\nNote: 'last quarter' = Q2 2018, the last complete quarter in the data (latest date 2018-09-03); S\u00e3o Paulo is read as the state (SP); ask about S\u00e3o Paulo city for the city only; 2016 is a partial year (data from 2016-09-04 to 2016-12-23); 2018 is a partial year (data from 2018-01-01 to 2018-09-03)."
+   "text": "2018 Q2 (orders 8,984, revenue 1,173,308.82).\nNote: 'last quarter' = Q2 2018, the last complete quarter in the data (latest date 2018-09-03); S\u00e3o Paulo is read as the state (SP); ask about S\u00e3o Paulo city for the city only; 2016 is a partial year (data from 2016-09-04 to 2016-12-23); 2018 is a partial year (data from 2018-01-01 to 2018-09-03)."
   },
   {
    "case": "summary names the real peak month",
@@ -153,7 +153,7 @@
      "reasons": []
     }
    ],
-   "secs": 16.5,
+   "secs": 34.5,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 2,
@@ -179,7 +179,7 @@
      "reasons": []
     }
    ],
-   "secs": 13.0,
+   "secs": 24.0,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 2,
@@ -232,7 +232,7 @@
      "reasons": []
     }
    ],
-   "secs": 147.9,
+   "secs": 263.6,
    "llm_calls": 15,
    "kind": "answer",
    "attempts": 3,
@@ -267,7 +267,7 @@
      "reasons": []
     }
    ],
-   "secs": 29.3,
+   "secs": 39.1,
    "llm_calls": 5,
    "kind": "answer",
    "attempts": 1,
@@ -302,7 +302,7 @@
      "reasons": []
     }
    ],
-   "secs": 12.5,
+   "secs": 16.0,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 1,
@@ -328,7 +328,7 @@
      "reasons": []
     }
    ],
-   "secs": 1.9,
+   "secs": 2.2,
    "llm_calls": 1,
    "kind": "clarify",
    "attempts": 1,
@@ -363,7 +363,7 @@
      "reasons": []
     }
    ],
-   "secs": 17.8,
+   "secs": 34.2,
    "llm_calls": 4,
    "kind": "answer",
    "attempts": 1,
@@ -398,7 +398,7 @@
      "reasons": []
     }
    ],
-   "secs": 3.8,
+   "secs": 8.3,
    "llm_calls": 2,
    "kind": "clarify",
    "attempts": 1,
@@ -424,7 +424,7 @@
      "reasons": []
     }
    ],
-   "secs": 1.6,
+   "secs": 2.8,
    "llm_calls": 1,
    "kind": "cannot",
    "attempts": 1,
@@ -450,7 +450,7 @@
      "reasons": []
     }
    ],
-   "secs": 1.3,
+   "secs": 1.7,
    "llm_calls": 1,
    "kind": "cannot",
    "attempts": 1,
@@ -493,23 +493,23 @@
    "reasons": [],
    "turns": [
     {
-     "ask": "hello",
-     "kind": "cannot",
-     "question": "hello",
+     "ask": "heey how are you",
+     "kind": "chat",
+     "question": "heey how are you",
      "sql": null,
      "table": null,
-     "text": "I answer questions about Olist's sales data: orders, revenue, product categories, sellers, customers, deliveries, payments and reviews, from 2016-09-04 to 2018-09-03. For example: \"Top 5 categories by revenue in 2017\" or \"Average review score by customer state\".",
+     "text": "Hey! I'm doing great, thanks for asking. How can I help you today? You can ask me things like \"Top 5 categories by revenue in 2017\" or \"Which categories have the worst reviews?\"",
      "reasons": []
     }
    ],
    "secs": 0.0,
    "llm_calls": 0,
-   "kind": "cannot",
+   "kind": "chat",
    "attempts": 0,
-   "question": "hello",
+   "question": "heey how are you",
    "sql": null,
    "table": null,
-   "text": "I answer questions about Olist's sales data: orders, revenue, product categories, sellers, customers, deliveries, payments and reviews, from 2016-09-04 to 2018-09-03. For example: \"Top 5 categories by revenue in 2017\" or \"Average review score by customer state\"."
+   "text": "Hey! I'm doing great, thanks for asking. How can I help you today? You can ask me things like \"Top 5 categories by revenue in 2017\" or \"Which categories have the worst reviews?\""
   },
   {
    "case": "average delivery days by state",
@@ -523,19 +523,19 @@
      "kind": "answer",
      "question": "Average delivery time in days by customer state",
      "sql": "SELECT customer_state, ROUND(AVG(delivery_days), 2) AS avg_delivery_days, COUNT(delivery_days) AS orders\nFROM order_facts\nWHERE delivery_days IS NOT NULL\nGROUP BY customer_state\nORDER BY avg_delivery_days ASC",
-     "table": "customer_state | avg_delivery_days | orders\n---------------+-------------------+-------\nSP             | 8.70              | 40494 \nPR             | 11.94             | 4923  \nMG             | 11.94             | 11354 \nDF             | 12.90             | 2080  \nSC             | 14.90             | 3546  \nRJ             | 15.24             | 12350 \nRS             | 15.25             | 5344  \nMS             | 15.54             | 701   \nGO             | 15.54             | 1957  \nES             | 15.72             | 1995  \nTO             | 17.60             | 274   \nMT             | 18.00             | 886   \nPE             | 18.40             | 1593  \nRN             | 19.22             | 474   \nRO             | 19.28             | 243   \nBA             | 19.28             | 3256  \nPI             | 19.39             | 476   \nPB             | 20.39             | 517   \nAC             | 21.00             | 80    \nCE             | 21.20             | 1279  \nSE             | 21.46             | 335   \nMA             | 21.51             | 717   \nPA             | 23.73             | 946   \nAL             | 24.50             | 397   \nAM             | 26.36             | 145   \nAP             | 27.18             | 67    \nRR             | 29.34             | 41    ",
-     "text": "Delivery times vary significantly by state, with Rio Grande do Sul (RR) taking the longest at 29.34 days compared to S\u00e3o Paulo (SP) at 8.70 days. States with fewer orders, such as Amap\u00e1 (AP) with only 67 orders and Rond\u00f4nia (RO) with 243 orders, have averages that are less reliable. The data shows a clear trend where delivery times increase as one moves further from the major hubs like SP and PR.",
+     "table": "customer_state | avg_delivery_days | orders\n---------------+-------------------+-------\nSP             | 8.70              | 40494 \nPR             | 11.94             | 4923  \nMG             | 11.94             | 11354 \nDF             | 12.90             | 2080  \nSC             | 14.90             | 3546  \nRJ             | 15.24             | 12350 \nRS             | 15.25             | 5344  \nMS             | 15.54             | 701   \nGO             | 15.54             | 1957  \nES             | 15.72             | 1995  \nTO             | 17.60             | 274   \nMT             | 18.00             | 886   \nPE             | 18.40             | 1593  \nRN             | 19.22             | 474   \nBA             | 19.28             | 3256  \nRO             | 19.28             | 243   \nPI             | 19.39             | 476   \nPB             | 20.39             | 517   \nAC             | 21.00             | 80    \nCE             | 21.20             | 1279  \nSE             | 21.46             | 335   \nMA             | 21.51             | 717   \nPA             | 23.73             | 946   \nAL             | 24.50             | 397   \nAM             | 26.36             | 145   \nAP             | 27.18             | 67    \nRR             | 29.34             | 41    ",
+     "text": "Delivery times vary significantly by state, with Rio Grande do Sul (RR) taking the longest at 29.34 days compared to S\u00e3o Paulo (SP) at 8.70 days. Several states, such as Amap\u00e1 (AM) with only 145 orders and Acre (AC) with 80 orders, have averages that are less reliable due to their small sample sizes.",
      "reasons": []
     }
    ],
-   "secs": 26.4,
+   "secs": 47.7,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 1,
    "question": "Average delivery time in days by customer state",
    "sql": "SELECT customer_state, ROUND(AVG(delivery_days), 2) AS avg_delivery_days, COUNT(delivery_days) AS orders\nFROM order_facts\nWHERE delivery_days IS NOT NULL\nGROUP BY customer_state\nORDER BY avg_delivery_days ASC",
-   "table": "customer_state | avg_delivery_days | orders\n---------------+-------------------+-------\nSP             | 8.70              | 40494 \nPR             | 11.94             | 4923  \nMG             | 11.94             | 11354 \nDF             | 12.90             | 2080  \nSC             | 14.90             | 3546  \nRJ             | 15.24             | 12350 \nRS             | 15.25             | 5344  \nMS             | 15.54             | 701   \nGO             | 15.54             | 1957  \nES             | 15.72             | 1995  \nTO             | 17.60             | 274   \nMT             | 18.00             | 886   \nPE             | 18.40             | 1593  \nRN             | 19.22             | 474   \nRO             | 19.28             | 243   \nBA             | 19.28             | 3256  \nPI             | 19.39             | 476   \nPB             | 20.39             | 517   \nAC             | 21.00             | 80    \nCE             | 21.20             | 1279  \nSE             | 21.46             | 335   \nMA             | 21.51             | 717   \nPA             | 23.73             | 946   \nAL             | 24.50             | 397   \nAM             | 26.36             | 145   \nAP             | 27.18             | 67    \nRR             | 29.34             | 41    ",
-   "text": "Delivery times vary significantly by state, with Rio Grande do Sul (RR) taking the longest at 29.34 days compared to S\u00e3o Paulo (SP) at 8.70 days. States with fewer orders, such as Amap\u00e1 (AP) with only 67 orders and Rond\u00f4nia (RO) with 243 orders, have averages that are less reliable. The data shows a clear trend where delivery times increase as one moves further from the major hubs like SP and PR."
+   "table": "customer_state | avg_delivery_days | orders\n---------------+-------------------+-------\nSP             | 8.70              | 40494 \nPR             | 11.94             | 4923  \nMG             | 11.94             | 11354 \nDF             | 12.90             | 2080  \nSC             | 14.90             | 3546  \nRJ             | 15.24             | 12350 \nRS             | 15.25             | 5344  \nMS             | 15.54             | 701   \nGO             | 15.54             | 1957  \nES             | 15.72             | 1995  \nTO             | 17.60             | 274   \nMT             | 18.00             | 886   \nPE             | 18.40             | 1593  \nRN             | 19.22             | 474   \nBA             | 19.28             | 3256  \nRO             | 19.28             | 243   \nPI             | 19.39             | 476   \nPB             | 20.39             | 517   \nAC             | 21.00             | 80    \nCE             | 21.20             | 1279  \nSE             | 21.46             | 335   \nMA             | 21.51             | 717   \nPA             | 23.73             | 946   \nAL             | 24.50             | 397   \nAM             | 26.36             | 145   \nAP             | 27.18             | 67    \nRR             | 29.34             | 41    ",
+   "text": "Delivery times vary significantly by state, with Rio Grande do Sul (RR) taking the longest at 29.34 days compared to S\u00e3o Paulo (SP) at 8.70 days. Several states, such as Amap\u00e1 (AM) with only 145 orders and Acre (AC) with 80 orders, have averages that are less reliable due to their small sample sizes."
   },
   {
    "case": "'it' = the item the previous question asked for",
@@ -549,7 +549,7 @@
      "kind": "answer",
      "question": "Which category had the worst reviews?",
      "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales) s\nJOIN order_facts f ON f.order_id = s.order_id\nGROUP BY category\nORDER BY avg_score ASC",
-     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \noffice_furniture                              | 3.62      | 1262  \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nfashion_underwear_beach                       | 3.93      | 120   \nunknown                                       | 3.93      | 1425  \nfixed_telephony                               | 3.94      | 211   \nbed_bath_table                                | 3.97      | 9295  \nhome_construction                             | 3.97      | 487   \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \nart                                           | 4.04      | 199   \nmarket_place                                  | 4.04      | 277   \ncomputers_accessories                         | 4.04      | 6616  \nfurniture_living_room                         | 4.04      | 415   \nbaby                                          | 4.05      | 2844  \nair_conditioning                              | 4.05      | 247   \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nwatches_gifts                                 | 4.07      | 5557  \nchristmas_supplies                            | 4.08      | 125   \nconstruction_tools_construction               | 4.09      | 741   \nconsoles_games                                | 4.09      | 1044  \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \ngarden_tools                                  | 4.14      | 3483  \nfurniture_bedroom                             | 4.14      | 95    \nconstruction_tools_lights                     | 4.14      | 240   \nhome_appliances_2                             | 4.15      | 230   \nhousewares                                    | 4.16      | 5808  \ntablets_printing_image                        | 4.16      | 77    \nhome_appliances                               | 4.16      | 759   \narts_and_craftmanship                         | 4.17      | 23    \ndrinks                                        | 4.17      | 295   \ncomputers                                     | 4.17      | 178   \ncool_stuff                                    | 4.18      | 3586  \nsports_leisure                                | 4.18      | 7623  \nhealth_beauty                                 | 4.19      | 8735  \nindustry_commerce_and_business                | 4.19      | 233   \ndvds_blu_ray                                  | 4.20      | 56    \n... (showing first 50 rows)",
+     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nfashion_underwear_beach                       | 3.93      | 120   \nunknown                                       | 3.93      | 1425  \nfixed_telephony                               | 3.94      | 211   \nhome_construction                             | 3.97      | 487   \nbed_bath_table                                | 3.97      | 9295  \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nfurniture_decor                               | 4.02      | 6375  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_living_room                         | 4.04      | 415   \nart                                           | 4.04      | 199   \ncomputers_accessories                         | 4.04      | 6616  \nmarket_place                                  | 4.04      | 277   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nwatches_gifts                                 | 4.07      | 5557  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nchristmas_supplies                            | 4.08      | 125   \nconstruction_tools_construction               | 4.09      | 741   \nconsoles_games                                | 4.09      | 1044  \nauto                                          | 4.10      | 3852  \nelectronics                                   | 4.10      | 2524  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \ngarden_tools                                  | 4.14      | 3483  \nfurniture_bedroom                             | 4.14      | 95    \nhome_appliances_2                             | 4.15      | 230   \ntablets_printing_image                        | 4.16      | 77    \nhousewares                                    | 4.16      | 5808  \nhome_appliances                               | 4.16      | 759   \ncomputers                                     | 4.17      | 178   \narts_and_craftmanship                         | 4.17      | 23    \ndrinks                                        | 4.17      | 295   \ncool_stuff                                    | 4.18      | 3586  \nsports_leisure                                | 4.18      | 7623  \nindustry_commerce_and_business                | 4.19      | 233   \nhealth_beauty                                 | 4.19      | 8735  \ndvds_blu_ray                                  | 4.20      | 56    \n... (showing first 50 rows)",
      "text": "The category with the worst reviews is security_and_services, which has an average score of 2.50 based on only 2 orders. This low score is less reliable compared to other categories due to the very small number of orders.",
      "reasons": []
     },
@@ -563,7 +563,7 @@
      "reasons": []
     }
    ],
-   "secs": 21.7,
+   "secs": 45.7,
    "llm_calls": 5,
    "kind": "answer",
    "attempts": 1,
@@ -598,7 +598,7 @@
      "reasons": []
     }
    ],
-   "secs": 11.5,
+   "secs": 21.0,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 1,
@@ -633,7 +633,7 @@
      "reasons": []
     }
    ],
-   "secs": 3.3,
+   "secs": 5.8,
    "llm_calls": 1,
    "kind": "clarify",
    "attempts": 0,
@@ -674,7 +674,7 @@
      ]
     }
    ],
-   "secs": 35.3,
+   "secs": 60.8,
    "llm_calls": 6,
    "kind": "error",
    "attempts": 4,
@@ -695,7 +695,7 @@
      "kind": "answer",
      "question": "Which category had the worst reviews?",
      "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales) s\nJOIN order_facts f ON f.order_id = s.order_id\nGROUP BY category\nORDER BY avg_score ASC",
-     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nfashion_underwear_beach                       | 3.93      | 120   \nunknown                                       | 3.93      | 1425  \nfixed_telephony                               | 3.94      | 211   \nbed_bath_table                                | 3.97      | 9295  \nhome_construction                             | 3.97      | 487   \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \nmarket_place                                  | 4.04      | 277   \nfurniture_living_room                         | 4.04      | 415   \ncomputers_accessories                         | 4.04      | 6616  \nart                                           | 4.04      | 199   \nair_conditioning                              | 4.05      | 247   \nbaby                                          | 4.05      | 2844  \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nwatches_gifts                                 | 4.07      | 5557  \nchristmas_supplies                            | 4.08      | 125   \nconsoles_games                                | 4.09      | 1044  \nconstruction_tools_construction               | 4.09      | 741   \nelectronics                                   | 4.10      | 2524  \nauto                                          | 4.10      | 3852  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \nfurniture_bedroom                             | 4.14      | 95    \ngarden_tools                                  | 4.14      | 3483  \nhome_appliances_2                             | 4.15      | 230   \nhome_appliances                               | 4.16      | 759   \ntablets_printing_image                        | 4.16      | 77    \nhousewares                                    | 4.16      | 5808  \ncomputers                                     | 4.17      | 178   \narts_and_craftmanship                         | 4.17      | 23    \ndrinks                                        | 4.17      | 295   \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nhealth_beauty                                 | 4.19      | 8735  \nindustry_commerce_and_business                | 4.19      | 233   \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
+     "table": "category                                      | avg_score | orders\n----------------------------------------------+-----------+-------\nsecurity_and_services                         | 2.50      | 2     \npc_gamer                                      | 3.43      | 7     \nportateis_cozinha_e_preparadores_de_alimentos | 3.62      | 13    \noffice_furniture                              | 3.62      | 1262  \nfashio_female_clothing                        | 3.69      | 39    \nfashion_male_clothing                         | 3.73      | 110   \nfurniture_mattress_and_upholstery             | 3.82      | 38    \nhome_comfort_2                                | 3.83      | 23    \naudio                                         | 3.84      | 346   \ndiapers_and_hygiene                           | 3.85      | 26    \nhome_confort                                  | 3.86      | 395   \nconstruction_tools_safety                     | 3.87      | 164   \nunknown                                       | 3.93      | 1425  \nfashion_underwear_beach                       | 3.93      | 120   \nfixed_telephony                               | 3.94      | 211   \nbed_bath_table                                | 3.97      | 9295  \nhome_construction                             | 3.97      | 487   \nparty_supplies                                | 4.00      | 39    \ntelephony                                     | 4.01      | 4154  \nagro_industry_and_commerce                    | 4.02      | 182   \nfurniture_decor                               | 4.02      | 6375  \nart                                           | 4.04      | 199   \ncomputers_accessories                         | 4.04      | 6616  \nmarket_place                                  | 4.04      | 277   \nfurniture_living_room                         | 4.04      | 415   \nbaby                                          | 4.05      | 2844  \nair_conditioning                              | 4.05      | 247   \nkitchen_dining_laundry_garden_furniture       | 4.07      | 244   \nwatches_gifts                                 | 4.07      | 5557  \nchristmas_supplies                            | 4.08      | 125   \nconstruction_tools_construction               | 4.09      | 741   \nconsoles_games                                | 4.09      | 1044  \nelectronics                                   | 4.10      | 2524  \nauto                                          | 4.10      | 3852  \nsignaling_and_security                        | 4.11      | 138   \nconstruction_tools_lights                     | 4.14      | 240   \ngarden_tools                                  | 4.14      | 3483  \nfurniture_bedroom                             | 4.14      | 95    \nhome_appliances_2                             | 4.15      | 230   \nhousewares                                    | 4.16      | 5808  \nhome_appliances                               | 4.16      | 759   \ntablets_printing_image                        | 4.16      | 77    \ndrinks                                        | 4.17      | 295   \ncomputers                                     | 4.17      | 178   \narts_and_craftmanship                         | 4.17      | 23    \nsports_leisure                                | 4.18      | 7623  \ncool_stuff                                    | 4.18      | 3586  \nhealth_beauty                                 | 4.19      | 8735  \nindustry_commerce_and_business                | 4.19      | 233   \nfashion_bags_accessories                      | 4.20      | 1848  \n... (showing first 50 rows)",
      "text": "The category with the worst reviews is security_and_services, which has an average score of 2.50 based on only 2 orders. This low score is less reliable compared to other categories due to the very small number of orders.",
      "reasons": []
     },
@@ -713,19 +713,19 @@
      "kind": "answer",
      "question": "Which category had the worst reviews? (for one specific year) (Clarification: 2017)",
      "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales WHERE purchase_year = 2017) s\nJOIN order_facts f ON f.order_id = s.order_id\nWHERE f.review_score IS NOT NULL\nGROUP BY category\nORDER BY avg_score ASC",
-     "table": "category                                | avg_score | orders\n----------------------------------------+-----------+-------\ndiapers_and_hygiene                     | 1.00      | 1     \nsecurity_and_services                   | 2.50      | 2     \nsmall_appliances_home_oven_and_coffee   | 2.50      | 4     \nfashio_female_clothing                  | 3.47      | 30    \npc_gamer                                | 3.50      | 4     \nfashion_male_clothing                   | 3.58      | 86    \noffice_furniture                        | 3.64      | 615   \nconstruction_tools_lights               | 3.76      | 17    \nconstruction_tools_safety               | 3.78      | 37    \nhome_confort                            | 3.79      | 247   \naudio                                   | 3.82      | 158   \nagro_industry_and_commerce              | 3.85      | 48    \nhome_construction                       | 3.89      | 110   \nunknown                                 | 3.95      | 805   \nconstruction_tools_construction         | 3.96      | 103   \nbed_bath_table                          | 3.98      | 4442  \nhome_appliances_2                       | 3.99      | 85    \nfurniture_decor                         | 3.99      | 3157  \nfurniture_mattress_and_upholstery       | 4.00      | 18    \nfixed_telephony                         | 4.00      | 121   \nsignaling_and_security                  | 4.00      | 33    \nbooks_imported                          | 4.00      | 13    \nparty_supplies                          | 4.00      | 10    \nair_conditioning                        | 4.03      | 110   \nkitchen_dining_laundry_garden_furniture | 4.03      | 105   \ntelephony                               | 4.05      | 2008  \nfashion_underwear_beach                 | 4.05      | 83    \nmarket_place                            | 4.06      | 175   \ndvds_blu_ray                            | 4.06      | 34    \nmusical_instruments                     | 4.07      | 243   \nauto                                    | 4.08      | 1403  \nelectronics                             | 4.10      | 812   \ncostruction_tools_garden                | 4.10      | 63    \ncomputers_accessories                   | 4.10      | 2590  \nchristmas_supplies                      | 4.10      | 48    \nbaby                                    | 4.11      | 1191  \nfashion_bags_accessories                | 4.11      | 1016  \ndrinks                                  | 4.11      | 73    \nhome_appliances                         | 4.12      | 240   \nwatches_gifts                           | 4.14      | 2097  \nhousewares                              | 4.14      | 2423  \ngarden_tools                            | 4.15      | 1954  \nfurniture_living_room                   | 4.15      | 202   \nconsoles_games                          | 4.17      | 657   \nindustry_commerce_and_business          | 4.17      | 35    \nmusic                                   | 4.18      | 11    \nperfumery                               | 4.18      | 1637  \nart                                     | 4.19      | 36    \ncomputers                               | 4.19      | 121   \nhealth_beauty                           | 4.19      | 3355  \n... (showing first 50 rows)",
-     "text": "Highest avg score: art (4.19); lowest: diapers_and_hygiene (1.00).",
+     "table": "category                                | avg_score | orders\n----------------------------------------+-----------+-------\ndiapers_and_hygiene                     | 1.00      | 1     \nsecurity_and_services                   | 2.50      | 2     \nsmall_appliances_home_oven_and_coffee   | 2.50      | 4     \nfashio_female_clothing                  | 3.47      | 30    \npc_gamer                                | 3.50      | 4     \nfashion_male_clothing                   | 3.58      | 86    \noffice_furniture                        | 3.64      | 615   \nconstruction_tools_lights               | 3.76      | 17    \nconstruction_tools_safety               | 3.78      | 37    \nhome_confort                            | 3.79      | 247   \naudio                                   | 3.82      | 158   \nagro_industry_and_commerce              | 3.85      | 48    \nhome_construction                       | 3.89      | 110   \nunknown                                 | 3.95      | 805   \nconstruction_tools_construction         | 3.96      | 103   \nbed_bath_table                          | 3.98      | 4442  \nhome_appliances_2                       | 3.99      | 85    \nfurniture_decor                         | 3.99      | 3157  \nsignaling_and_security                  | 4.00      | 33    \nbooks_imported                          | 4.00      | 13    \nfixed_telephony                         | 4.00      | 121   \nfurniture_mattress_and_upholstery       | 4.00      | 18    \nparty_supplies                          | 4.00      | 10    \nair_conditioning                        | 4.03      | 110   \nkitchen_dining_laundry_garden_furniture | 4.03      | 105   \ntelephony                               | 4.05      | 2008  \nfashion_underwear_beach                 | 4.05      | 83    \nmarket_place                            | 4.06      | 175   \ndvds_blu_ray                            | 4.06      | 34    \nmusical_instruments                     | 4.07      | 243   \nauto                                    | 4.08      | 1403  \ncomputers_accessories                   | 4.10      | 2590  \nchristmas_supplies                      | 4.10      | 48    \ncostruction_tools_garden                | 4.10      | 63    \nelectronics                             | 4.10      | 812   \nbaby                                    | 4.11      | 1191  \nfashion_bags_accessories                | 4.11      | 1016  \ndrinks                                  | 4.11      | 73    \nhome_appliances                         | 4.12      | 240   \nhousewares                              | 4.14      | 2423  \nwatches_gifts                           | 4.14      | 2097  \ngarden_tools                            | 4.15      | 1954  \nfurniture_living_room                   | 4.15      | 202   \nindustry_commerce_and_business          | 4.17      | 35    \nconsoles_games                          | 4.17      | 657   \nperfumery                               | 4.18      | 1637  \nmusic                                   | 4.18      | 11    \ntablets_printing_image                  | 4.19      | 57    \nhealth_beauty                           | 4.19      | 3355  \ncomputers                               | 4.19      | 121   \n... (showing first 50 rows)",
+     "text": "In 2017, the category with the worst reviews was diapers_and_hygiene, which received an average score of 1.00 based on only 1 order. This extremely low score is likely less reliable due to the very small number of orders compared to other categories.",
      "reasons": []
     }
    ],
-   "secs": 39.2,
+   "secs": 62.2,
    "llm_calls": 6,
    "kind": "answer",
    "attempts": 1,
    "question": "Which category had the worst reviews? (for one specific year) (Clarification: 2017)",
    "sql": "SELECT category, ROUND(AVG(f.review_score), 2) AS avg_score, COUNT(f.review_score) AS orders\nFROM (SELECT DISTINCT order_id, category FROM sales WHERE purchase_year = 2017) s\nJOIN order_facts f ON f.order_id = s.order_id\nWHERE f.review_score IS NOT NULL\nGROUP BY category\nORDER BY avg_score ASC",
-   "table": "category                                | avg_score | orders\n----------------------------------------+-----------+-------\ndiapers_and_hygiene                     | 1.00      | 1     \nsecurity_and_services                   | 2.50      | 2     \nsmall_appliances_home_oven_and_coffee   | 2.50      | 4     \nfashio_female_clothing                  | 3.47      | 30    \npc_gamer                                | 3.50      | 4     \nfashion_male_clothing                   | 3.58      | 86    \noffice_furniture                        | 3.64      | 615   \nconstruction_tools_lights               | 3.76      | 17    \nconstruction_tools_safety               | 3.78      | 37    \nhome_confort                            | 3.79      | 247   \naudio                                   | 3.82      | 158   \nagro_industry_and_commerce              | 3.85      | 48    \nhome_construction                       | 3.89      | 110   \nunknown                                 | 3.95      | 805   \nconstruction_tools_construction         | 3.96      | 103   \nbed_bath_table                          | 3.98      | 4442  \nhome_appliances_2                       | 3.99      | 85    \nfurniture_decor                         | 3.99      | 3157  \nfurniture_mattress_and_upholstery       | 4.00      | 18    \nfixed_telephony                         | 4.00      | 121   \nsignaling_and_security                  | 4.00      | 33    \nbooks_imported                          | 4.00      | 13    \nparty_supplies                          | 4.00      | 10    \nair_conditioning                        | 4.03      | 110   \nkitchen_dining_laundry_garden_furniture | 4.03      | 105   \ntelephony                               | 4.05      | 2008  \nfashion_underwear_beach                 | 4.05      | 83    \nmarket_place                            | 4.06      | 175   \ndvds_blu_ray                            | 4.06      | 34    \nmusical_instruments                     | 4.07      | 243   \nauto                                    | 4.08      | 1403  \nelectronics                             | 4.10      | 812   \ncostruction_tools_garden                | 4.10      | 63    \ncomputers_accessories                   | 4.10      | 2590  \nchristmas_supplies                      | 4.10      | 48    \nbaby                                    | 4.11      | 1191  \nfashion_bags_accessories                | 4.11      | 1016  \ndrinks                                  | 4.11      | 73    \nhome_appliances                         | 4.12      | 240   \nwatches_gifts                           | 4.14      | 2097  \nhousewares                              | 4.14      | 2423  \ngarden_tools                            | 4.15      | 1954  \nfurniture_living_room                   | 4.15      | 202   \nconsoles_games                          | 4.17      | 657   \nindustry_commerce_and_business          | 4.17      | 35    \nmusic                                   | 4.18      | 11    \nperfumery                               | 4.18      | 1637  \nart                                     | 4.19      | 36    \ncomputers                               | 4.19      | 121   \nhealth_beauty                           | 4.19      | 3355  \n... (showing first 50 rows)",
-   "text": "Highest avg score: art (4.19); lowest: diapers_and_hygiene (1.00)."
+   "table": "category                                | avg_score | orders\n----------------------------------------+-----------+-------\ndiapers_and_hygiene                     | 1.00      | 1     \nsecurity_and_services                   | 2.50      | 2     \nsmall_appliances_home_oven_and_coffee   | 2.50      | 4     \nfashio_female_clothing                  | 3.47      | 30    \npc_gamer                                | 3.50      | 4     \nfashion_male_clothing                   | 3.58      | 86    \noffice_furniture                        | 3.64      | 615   \nconstruction_tools_lights               | 3.76      | 17    \nconstruction_tools_safety               | 3.78      | 37    \nhome_confort                            | 3.79      | 247   \naudio                                   | 3.82      | 158   \nagro_industry_and_commerce              | 3.85      | 48    \nhome_construction                       | 3.89      | 110   \nunknown                                 | 3.95      | 805   \nconstruction_tools_construction         | 3.96      | 103   \nbed_bath_table                          | 3.98      | 4442  \nhome_appliances_2                       | 3.99      | 85    \nfurniture_decor                         | 3.99      | 3157  \nsignaling_and_security                  | 4.00      | 33    \nbooks_imported                          | 4.00      | 13    \nfixed_telephony                         | 4.00      | 121   \nfurniture_mattress_and_upholstery       | 4.00      | 18    \nparty_supplies                          | 4.00      | 10    \nair_conditioning                        | 4.03      | 110   \nkitchen_dining_laundry_garden_furniture | 4.03      | 105   \ntelephony                               | 4.05      | 2008  \nfashion_underwear_beach                 | 4.05      | 83    \nmarket_place                            | 4.06      | 175   \ndvds_blu_ray                            | 4.06      | 34    \nmusical_instruments                     | 4.07      | 243   \nauto                                    | 4.08      | 1403  \ncomputers_accessories                   | 4.10      | 2590  \nchristmas_supplies                      | 4.10      | 48    \ncostruction_tools_garden                | 4.10      | 63    \nelectronics                             | 4.10      | 812   \nbaby                                    | 4.11      | 1191  \nfashion_bags_accessories                | 4.11      | 1016  \ndrinks                                  | 4.11      | 73    \nhome_appliances                         | 4.12      | 240   \nhousewares                              | 4.14      | 2423  \nwatches_gifts                           | 4.14      | 2097  \ngarden_tools                            | 4.15      | 1954  \nfurniture_living_room                   | 4.15      | 202   \nindustry_commerce_and_business          | 4.17      | 35    \nconsoles_games                          | 4.17      | 657   \nperfumery                               | 4.18      | 1637  \nmusic                                   | 4.18      | 11    \ntablets_printing_image                  | 4.19      | 57    \nhealth_beauty                           | 4.19      | 3355  \ncomputers                               | 4.19      | 121   \n... (showing first 50 rows)",
+   "text": "In 2017, the category with the worst reviews was diapers_and_hygiene, which received an average score of 1.00 based on only 1 order. This extremely low score is likely less reliable due to the very small number of orders compared to other categories."
   },
   {
    "case": "unrelated new question does not inherit the previous answer",
@@ -753,7 +753,7 @@
      "reasons": []
     }
    ],
-   "secs": 8.4,
+   "secs": 14.0,
    "llm_calls": 3,
    "kind": "answer",
    "attempts": 1,
@@ -788,7 +788,7 @@
      "reasons": []
     }
    ],
-   "secs": 18.7,
+   "secs": 29.1,
    "llm_calls": 5,
    "kind": "answer",
    "attempts": 2,
