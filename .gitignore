@@ -71,6 +71,3 @@ logs/
 # ---- Eval: keep only the final run (eval/RESULTS.md summarises it) ----
 eval/results/*
 !eval/results/final.json
-
-# ---- Assignment brief (not part of the submission) ----
-file.md
