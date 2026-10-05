@@ -23,6 +23,9 @@ def test_small_results_summarised_in_code():
     assert "bed_bath_table (revenue 497,970.94)" in text and "watches_gifts (revenue 486,519.02)" in text
     assert small_summary(MONTHLY_COLS, MONTHLY_ROWS) is None  # > 5 rows: the model writes it
     assert small_summary(["avg", "orders"], [(5.0, 1231), (4.0, 416)]) is None  # rows have no labels
+    # Years are labels, written without a thousands separator.
+    assert small_summary(["purchase_year", "purchase_quarter", "orders", "revenue"],
+                         [(2018, 2, 8984, 1173308.82)]) == "2018 Q2 (orders 8,984, revenue 1,173,308.82)."
 
 
 def test_small_group_warning():

@@ -56,6 +56,8 @@ def label(columns, row, labels) -> str:
             parts.append(MONTHS[v - 1])
         elif col.endswith("quarter") and isinstance(v, int):
             parts.append(f"Q{v}")
+        elif col.endswith("year") and isinstance(v, int):
+            parts.append(str(v))  # 2018, not "2,018"
         else:
             parts.append(fmt(v))
     return " ".join(parts) or "total"
