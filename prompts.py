@@ -137,7 +137,9 @@ SQL:
 ```sql
 SELECT customer_state,
        ROUND(AVG(CASE WHEN purchase_year = 2017 THEN freight END), 2) AS avg_freight_2017,
-       ROUND(AVG(CASE WHEN purchase_year = 2018 THEN freight END), 2) AS avg_freight_2018
+       COUNT(CASE WHEN purchase_year = 2017 THEN freight END) AS orders_2017,
+       ROUND(AVG(CASE WHEN purchase_year = 2018 THEN freight END), 2) AS avg_freight_2018,
+       COUNT(CASE WHEN purchase_year = 2018 THEN freight END) AS orders_2018
 FROM order_facts
 WHERE is_delivered
 GROUP BY customer_state

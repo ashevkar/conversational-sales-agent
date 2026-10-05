@@ -324,6 +324,20 @@ FROM sales s WHERE s.purchase_year = 2017 GROUP BY category, s.customer_state OR
     assert check_sql(no_limit, "Revenue by category and customer state in 2017") == ""
 
 
+
+def test_grouped_average_needs_a_count():
+    # Real failure: averages per delivery status without the orders behind them.
+    no_count = """SELECT delivery_status, ROUND(AVG(review_score), 2) AS avg_review_score
+FROM order_facts WHERE is_sale AND delivery_status IS NOT NULL GROUP BY delivery_status"""
+    with_count = """SELECT delivery_status, ROUND(AVG(review_score), 2) AS avg_score, COUNT(review_score) AS orders
+FROM order_facts WHERE delivery_status IS NOT NULL GROUP BY delivery_status"""
+    q = "Average review score for late deliveries vs on-time deliveries"
+    assert "number of orders behind it" in check_sql(no_count, q)
+    assert check_sql(with_count, q) == ""
+    # One overall average needs no count.
+    assert check_sql("SELECT ROUND(AVG(review_score), 2) FROM order_facts", "Average review score") == ""
+
+
 if __name__ == "__main__":
     tests = [f for name, f in sorted(globals().items()) if name.startswith("test_")]
     for t in tests:

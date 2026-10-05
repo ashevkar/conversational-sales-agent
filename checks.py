@@ -219,6 +219,10 @@ def check_sql(sql: str, question: str = "") -> str:
         return ("sales has one row per item, so COUNT(*) or SUM(CASE ... THEN 1) counts items, not "
                 "orders. Count orders with COUNT(DISTINCT order_id), or per period with "
                 "COUNT(DISTINCT CASE WHEN purchase_year = 2017 THEN order_id END).")
+    if group_by and re.search(r"\bavg\s*\(", low) and not re.search(r"\bcount\s*\(", low):
+        return ("Each group's average needs the number of orders behind it, so small groups can "
+                "be spotted: add COUNT(<the averaged column>) AS orders next to AVG (one count per "
+                "period column in a side-by-side comparison).")
     grouped = {c.strip().split(".")[-1] for c in group_by.split(",") if c.strip()}
     aggregated = {m.lower() for m in re.findall(
         r"\b(?:avg|sum|min|max)\s*\(\s*(?:\w+\.)?(\w+)\s*\)", sql, re.I)}
