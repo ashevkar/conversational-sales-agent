@@ -57,4 +57,5 @@ Time and LLM calls are averaged over the runs.
 
 ## Failures
 
-- **'the second one'** (final): turn 2: SQL missing ['watches_gifts']; turn 2: kind=error: Sorry, I couldn't build a working query for that, so I won't guess. Last error: 
+- **'the second one'** (final): turn 2: SQL missing ['watches_gifts']; turn 2: kind=error: Sorry, I couldn't build a working query for that, so I won't guess. Last error: Every group has exactly one row, so the query groups by a unique id (such as order_id). Remove it from GROUP BY to aggregate across rows; for one overall number, use no GROUP BY at all.
+  The reference resolved correctly ("What was the average review score of watches_gifts in 2017?"), but none of the 4 SQL attempts passed the code checks, so the agent refused instead of guessing. Full exchange and explanation: [README, Evaluation and tests](../README.md#evaluation-and-tests); raw record: [results/final.json](results/final.json).
