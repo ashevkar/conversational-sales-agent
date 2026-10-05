@@ -90,19 +90,22 @@ def run_check(check: dict, reply) -> str:
         if reply.kind == "answer" and all(v in ("NULL", "0", "0.00", "") for v in values):
             return ""
         return f"kind={reply.kind} with data: {(reply.text or '')[:80]}"
-    if reply.kind != "answer":
-        return f"kind={reply.kind}: {reply.text[:80]}"
-
-    table, text = reply.table or "", reply.text or ""
-    if kind == "table_has":
-        missing = [i for i in check["items"] if not any(a in table for a in i.split("|"))]
-        return f"table missing {missing}" if missing else ""
+    # Text checks apply to any reply (e.g. a small-talk "chat" reply); the
+    # table and SQL checks below need an answer.
+    text = reply.text or ""
     if kind == "text_has":
         missing = [i for i in check["items"] if i not in text]
         return f"text missing {missing}" if missing else ""
     if kind == "text_lacks":
         found = [i for i in check["items"] if i in text]
         return f"text contains {found}" if found else ""
+    if reply.kind != "answer":
+        return f"kind={reply.kind}: {reply.text[:80]}"
+
+    table = reply.table or ""
+    if kind == "table_has":
+        missing = [i for i in check["items"] if not any(a in table for a in i.split("|"))]
+        return f"table missing {missing}" if missing else ""
     if kind == "only_values":
         col = column_index(table, check["col"])
         if col is None:

@@ -17,11 +17,21 @@ FIRST, LAST = date(2016, 9, 4), date(2018, 9, 3)
 
 
 def test_small_talk():
-    for msg in ["hello", "Hi!", "hey there", "Thanks", "thank you so much", "Olá", "what can you do?"]:
+    for msg in ["hello", "Hi!", "hey there", "Thanks", "thank you so much", "Olá", "what can you do?",
+                "heey how are you", "hiii", "good morning", "what's up", "thanks a lot!", "bye"]:
         assert small_talk_reply(msg, FIRST, LAST), msg
+    assert small_talk_reply("heey how are you", FIRST, LAST).startswith("Hey! I'm doing great")
+    assert small_talk_reply("good morning", FIRST, LAST).startswith("Good morning!")
+    assert small_talk_reply("thanks a lot", FIRST, LAST).startswith("You're welcome")
+    # Anything about the data, and answers to clarifying questions, are not small talk.
     for msg in ["hello, what was revenue in 2017?", "top sellers", "thanks, now break it down by state",
-                "How many orders?"]:
+                "How many orders?", "how are sales doing in SP?", "yes", "ok", "no"]:
         assert not small_talk_reply(msg, FIRST, LAST), msg
+
+
+def test_sql_must_read_a_table():
+    # Real failure: "heey how are you" produced SELECT 1 AS greeting, shown as "greeting: 1".
+    assert "reads no table" in check_sql("SELECT 1 AS greeting", "heey how are you")
 
 
 def test_outside_coverage():
@@ -301,6 +311,7 @@ FROM sales WHERE category = 'watches_gifts'"""
                                        "How many orders in 2017?")
     assert check_sql("SELECT COUNT(*) FROM order_facts WHERE purchase_year = 2017", "How many orders in 2017?") == ""
     assert check_sql("SELECT COUNT(*) FROM sales WHERE purchase_year = 2017", "How many items were sold in 2017?") == ""
+
 
 
 def test_top_n_dropped():

@@ -21,23 +21,53 @@ def plain(text: str) -> str:
 
 
 # ---- small talk -----------------------------------------------------------
+# Greetings, thanks and "how are you" get a natural reply in code; they never
+# reach SQL generation. A message counts as small talk only if EVERY word is
+# conversational, so "hey, what was revenue in 2017?" still goes to the model.
+# "yes", "no" and "ok" are left out on purpose: they answer clarifying questions.
 
-SMALL_TALK = re.compile(
-    r"^(hi|hello|hey|hiya|hola|ola|good (morning|afternoon|evening)|thanks?( you)?|thank you|"
-    r"thx|cheers|bye|goodbye|how are you|who are you|what can you do|help)"
-    r"( there| everyone| so much| very much)?$"
-)
+
+def _squash(text: str) -> str:
+    """Collapse stretched letters ("heey" -> "hey", "hellooo" -> "helo") for matching."""
+    return re.sub(r"(.)\1+", r"\1", text)
+
+
+CASUAL_WORDS = {_squash(w) for w in """
+    hi hey hello hiya howdy hola ola yo sup heya there everyone all folks guys friend buddy
+    good morning afternoon evening day
+    how are you u r doing going is it things whats what up hows
+    thanks thank thx ty cheers much lot a so very appreciate appreciated
+    bye goodbye later see soon night
+    nice great cool awesome to meet
+    who can do help me please assistant
+""".split()}
+WELLBEING = re.compile(r"\bhow (are|r) (you|u)\b|\bhow is it going\b|\bhows it going\b|\bhow are things\b"
+                       r"|\bwhats up\b|\bwhat up\b|\bsup\b|\bhow (you|u) doing\b")
+CAPABILITIES = re.compile(r"\bwho are (you|u)\b|\bwhat can (you|u) do\b|\bhelp\b")
 
 
 def small_talk_reply(message: str, first_date, last_date) -> str:
-    """A fixed reply for greetings and thanks, so they never reach SQL generation."""
-    words = re.sub(r"[^a-z ]", " ", plain(message))
-    if not SMALL_TALK.match(" ".join(words.split())):
+    """A natural reply for greetings and casual messages, or '' if it isn't one."""
+    text = " ".join(re.sub(r"[^a-z ]", " ", plain(message).replace("'", "")).split())
+    words = text.split()
+    if not words or len(words) > 8 or not all(_squash(w) in CASUAL_WORDS for w in words):
         return ""
-    return ("I answer questions about Olist's sales data: orders, revenue, product categories, "
-            f"sellers, customers, deliveries, payments and reviews, from {first_date} to "
-            f"{last_date}. For example: \"Top 5 categories by revenue in 2017\" or "
-            "\"Average review score by customer state\".")
+    t = _squash(text)
+    examples = ('You can ask me things like "Top 5 categories by revenue in 2017" or '
+                '"Which categories have the worst reviews?"')
+    if CAPABILITIES.search(text):
+        return ("I'm a sales analytics assistant for Olist's data: orders, revenue, product "
+                f"categories, sellers, customers, deliveries, payments and reviews, from {first_date} "
+                f"to {last_date}. I turn your question into SQL, run it, and explain the result. "
+                + examples)
+    if re.search(r"\b(thanks|thank|thx|ty|cheers|apreciate|apreciated)\b", t):
+        return "You're welcome! Is there anything else you'd like to know about the sales data?"
+    if re.search(r"\b(bye|godbye|later|night)\b", t):
+        return "Bye! Come back any time you have a question about the sales data."
+    greeting = next((f"Good {p}!" for p in ("morning", "afternoon", "evening") if p in t), "Hey!")
+    if WELLBEING.search(_squash(text)) or WELLBEING.search(text):
+        return f"{greeting} I'm doing great, thanks for asking. How can I help you today? {examples}"
+    return f"{greeting} How can I help you today? {examples}"
 
 
 # ---- years the data does not cover ----------------------------------------
@@ -155,6 +185,9 @@ def check_sql(sql: str, question: str = "") -> str:
     low = sql.lower()
     group_by = main_group_by(sql)
 
+    if not used:
+        return ("The query reads no table, so it can't answer a question about the data. Query "
+                "the tables, or reply CANNOT if the message isn't about the sales data.")
     raw = sorted(used & RAW_TABLES)
     if raw:
         return (f"Do not use the raw table(s) {', '.join(raw)}. Use the sales view "

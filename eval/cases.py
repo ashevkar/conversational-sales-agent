@@ -224,8 +224,9 @@ _ALL = [
         "name": "not a data question",
         "eval": True,
         "category": "cannot",
-        "turns": ["hello"],
-        "checks": [{"type": "kind", "kind": "cannot"}],
+        # Small talk gets a natural reply in code: no SQL, no query, no result.
+        "turns": ["heey how are you"],
+        "checks": [{"type": "kind", "kind": "chat"}, {"type": "text_has", "items": ["How can I help"]}],
     },
     # ---- held-out --------------------------------------------------------
     # Per-order questions the prompt has no example for: they check that the

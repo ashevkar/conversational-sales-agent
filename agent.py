@@ -113,7 +113,7 @@ Write 1-3 short sentences that answer the question.
 
 @dataclass
 class Reply:
-    kind: str                # "answer" | "clarify" | "cannot" | "error"
+    kind: str                # "answer" | "clarify" | "cannot" | "error" | "chat" (small talk)
     text: str
     question: str = ""       # the standalone question that was actually answered
     sql: str | None = None
@@ -347,11 +347,11 @@ class Agent:
         return text
 
     def ask(self, message: str) -> Reply:
-        # Greetings and thanks get a fixed reply; no SQL is generated for them.
+        # Greetings, thanks and "how are you" get a natural reply; no SQL is generated.
         small_talk = small_talk_reply(message, self.first_date, self.last_date)
         if small_talk:
-            self._remember(message, f"CANNOT: {small_talk}")
-            return Reply("cannot", small_talk, question=message)
+            self._remember(message, f"CHAT: {small_talk}")
+            return Reply("chat", small_talk, question=message)
 
         self.resolved_values, self.resolved_filters = [], []
         question, clarification = self._resolve_question(message)
