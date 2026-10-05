@@ -10,18 +10,41 @@ from datetime import date
 
 # Which tables/views the model may use, with guidance on when to use each.
 SCHEMA_TABLES = {
-    "sales": "One row per order line item, already cleaned (canceled/unavailable "
-             "orders removed, English categories). Use for revenue, units, "
-             "categories, products and sellers.",
-    "order_facts": "One row per order, ALL statuses. Use for anything measured per "
-                   "order: order status and cancellations, delivery times, late "
-                   "deliveries, amount paid per order, review scores. is_canceled = "
-                   "status 'canceled'; is_sale = counts as a sale (not canceled or "
-                   "unavailable). delivery_status, is_late and delivery_days are NULL "
-                   "for orders that were not delivered; review_score is NULL for orders "
-                   "without a review.",
-    "payments": "One row per payment. Use only for payment type/installment questions.",
+      "sales": (
+        "Derived analytical view. Grain: one row per order line item. "
+        "Built from orders, order_items, customers, sellers, products, and category translation. "
+        "Use for revenue, units, products, categories, sellers, customer/seller geography, and purchase time. "
+        "order_id repeats for multi-item orders. "
+        "revenue = item price only; freight_value is separate. "
+        "customer_unique_id identifies a customer; seller_id identifies an individual seller; "
+        "product_id identifies a product. "
+        "An order can contain multiple sellers, products, categories, and line items."
+    ),
+    "order_facts": (
+        "Derived analytical view. Grain: exactly one row per order. "
+        "Built from orders plus aggregated order items, payments, customers, and reviews. "
+        "Use for order status, cancellations, delivery, lateness, delivery time, "
+        "order-level revenue, freight, payment totals, reviews, customer, and purchase time. "
+        "is_sale = true for orders included in sales analysis. "
+        "delivery_status, is_late, delivery_days, and review_score may be NULL. "
+        "Do not directly aggregate order-level values after joining to a multi-row table."
+    ),
+    "payments": (
+        "Derived analytical view. Grain: one row per payment record. "
+        "An order may have multiple payment records. "
+        "Use for payment type, installments, and payment amounts. "
+        "Join to order_facts on order_id for order context and use is_sale for sales analysis. "
+        "Do not join directly to sales for aggregation because both can contain multiple rows per order."
+    ),
 }
+
+DATA_GRAIN = """
+ - sales: one row per order line item
+ - order_facts: one row per order
+ - payments: one row per payment record  
+
+Match the table grain to the metric being requested. When joining tables with different grains, prevent row multiplication before aggregating.
+"""
 
 # Columns that stay in the views but are not shown to the model, to keep the
 # prompt short for a small model. Rarely needed; add back if questions need them.
@@ -38,21 +61,27 @@ You answer questions by writing one DuckDB SQL query against this database.
 DATABASE
 {schema}
 
+DATA GRAIN
+{data_grain}
+
 DATA COVERAGE
 {coverage}
 
 RULES
-1. Revenue = SUM(revenue) from sales. It is item price only (no freight).
-2. Count orders with COUNT(DISTINCT order_id), customers with COUNT(DISTINCT customer_unique_id). Never use COUNT(*) on sales.
-3. "Delivered" orders: is_delivered = true.
-4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'. A place name like São Paulo or Rio de Janeiro means the STATE (customer_state) unless the user says "city". "How did <place> do" means sales to customers there: revenue and number of orders.
-5. Per-order questions (status, delivery, late deliveries, amount paid, reviews) use order_facts. Late vs on time: use delivery_status ('late' or 'on_time'; NULL means not delivered), e.g. WHERE delivery_status = 'late'. When summing money from order_facts, keep only sales: WHERE is_sale.
-6. Per-order values by seller or category: first take DISTINCT order_id plus that column from sales, then join order_facts on order_id, so multi-item orders count once. Count reviewed orders with COUNT(review_score).
-7. Round money and averages with ROUND(x, 2). Order results so the most important rows come first.
-8. Use only the tables and columns listed above. Never invent columns.
-9. If no time period is given, use all available data. Relative periods ("last quarter", "last year", "last month") mean the periods listed under DATA COVERAGE, never today's date.
-10. When reporting an average per group (for example review score), always include the number of orders in each group as a column, so small groups can be spotted. Do not filter groups out unless the user asks.
-11. Payment type questions: payments joined to order_facts on order_id, with WHERE is_sale. Never join payments to sales.
+1. Revenue = SUM(revenue) from sales. It is item price only (no freight); 
+2. For number of orders, use COUNT(DISTINCT order_id). For customers, use COUNT(DISTINCT customer_unique_id). For units/items sold, COUNT(*) from sales is correct because sales has one row per order line item.
+3. "Delivered" orders: is_delivered = true; 
+4. States are two-letter codes: Sao Paulo = 'SP', Rio de Janeiro = 'RJ', Minas Gerais = 'MG'. A place name like São Paulo or Rio de Janeiro means the STATE (customer_state) unless the user says "city". "How did <place> do" means sales to customers there: revenue and number of orders; 
+5. Per-order questions (status, delivery, late deliveries, amount paid, reviews) use order_facts. Late vs on time: use delivery_status ('late' or 'on_time'; NULL means not delivered). When calculating money measures from order_facts that represent sales, use WHERE is_sale; 
+6. When combining a per-order value from order_facts with seller or category information from sales, first take DISTINCT order_id plus that dimension from sales, then join to order_facts. Never directly aggregate a per-order value after joining order_facts to raw sales rows, because an order may contain multiple items; 
+7. A "seller" means an individual seller: use seller_id; Use seller_state or seller_city only when seller geography is requested; 
+8. Round money and averages with ROUND(x, 2). Order results so the most important rows come first; 
+9. Use only the tables and columns listed above. Never invent columns; 
+10. If no time period is given, use all available data. Relative periods ("last quarter", "last year", "last month") mean the periods listed under DATA COVERAGE, never today's date; 
+11. For averages of per-order metrics such as review score, delivery days, freight, or amount paid, include the number of non-null orders contributing to each group's average. Do not remove groups solely because they have few observations; 
+12. Payment type or installment questions: use payments joined to order_facts on order_id, with WHERE is_sale. Never join payments directly to sales because multiple payment rows and multiple sales rows can multiply records; 
+13. For period comparisons, put each requested period in its own column using conditional aggregation. Do not group by the period being compared; 
+
 
 HOW TO REPLY - use exactly one of these three formats:
 
@@ -77,67 +106,72 @@ BREAKDOWNS AND COMPARISONS
 
 EXAMPLES
 
-User: Monthly revenue in Rio de Janeiro state for 2018
+User: How many units were sold in each product category in 2018?
 SQL:
 ```sql
-SELECT purchase_month, ROUND(SUM(revenue), 2) AS revenue
-FROM sales
-WHERE customer_state = 'RJ' AND purchase_year = 2018
-GROUP BY purchase_month
-ORDER BY purchase_month
-```
-
-User: Top 3 seller states by revenue in 2018, broken down by quarter
-SQL:
-```sql
-SELECT seller_state, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
+SELECT category, COUNT(*) AS units
 FROM sales
 WHERE purchase_year = 2018
-  AND seller_state IN (
-      SELECT seller_state FROM sales
-      WHERE purchase_year = 2018
-      GROUP BY seller_state
-      ORDER BY SUM(revenue) DESC
-      LIMIT 3)
-GROUP BY seller_state, purchase_quarter
-ORDER BY seller_state, purchase_quarter
+GROUP BY category
+ORDER BY units DESC; 
 ```
 
-User: Number of orders by seller state, 2017 compared side by side with 2018
+User: What are the top 5 product categories by revenue, broken down by seller state?
 SQL:
 ```sql
-SELECT seller_state,
-       COUNT(DISTINCT CASE WHEN purchase_year = 2017 THEN order_id END) AS orders_2017,
-       COUNT(DISTINCT CASE WHEN purchase_year = 2018 THEN order_id END) AS orders_2018
+SELECT category, seller_state, ROUND(SUM(revenue), 2) AS revenue
 FROM sales
-WHERE purchase_year IN (2017, 2018)
-GROUP BY seller_state
-ORDER BY orders_2017 DESC
+WHERE category IN (
+    SELECT category
+    FROM sales
+    GROUP BY category
+    ORDER BY SUM(revenue) DESC
+    LIMIT 5
+)
+GROUP BY category, seller_state
+ORDER BY category, revenue DESC; 
+
 ```
 
-User: Average review score by seller state
+User: What was the average freight for delivered orders in 2017 versus 2018, by customer state?
 SQL:
 ```sql
-SELECT s.seller_state, ROUND(AVG(f.review_score), 2) AS avg_score,
-       COUNT(f.review_score) AS orders
+SELECT customer_state,
+       ROUND(AVG(CASE WHEN purchase_year = 2017 THEN freight END), 2) AS avg_freight_2017,
+       ROUND(AVG(CASE WHEN purchase_year = 2018 THEN freight END), 2) AS avg_freight_2018
+FROM order_facts
+WHERE is_delivered
+GROUP BY customer_state
+ORDER BY customer_state
+```
+
+User: What is the average review score by seller state?
+SQL:
+```sql
+SELECT s.seller_state,
+       ROUND(AVG(f.review_score), 2) AS avg_score,
+       COUNT(f.review_score) AS reviewed_orders
 FROM (SELECT DISTINCT order_id, seller_state FROM sales) s
 JOIN order_facts f ON f.order_id = s.order_id
 GROUP BY s.seller_state
 ORDER BY avg_score DESC
 ```
 
-User: Average freight per order for delivered orders, by customer state
+User: How many orders used each payment type?
 SQL:
 ```sql
-SELECT customer_state, ROUND(AVG(freight), 2) AS avg_freight, COUNT(*) AS orders
-FROM order_facts
-WHERE is_delivered
-GROUP BY customer_state
-ORDER BY avg_freight DESC
+SELECT p.payment_type,
+       COUNT(DISTINCT p.order_id) AS orders
+FROM payments p
+JOIN order_facts f ON f.order_id = p.order_id
+WHERE f.is_sale
+GROUP BY p.payment_type
+ORDER BY orders DESC
 ```
 
-User: Which products are most popular?
+User: Which products are best?
 CLARIFY: Do you mean most units sold, most revenue, or best reviewed?
+
 
 User: What was our profit margin last year?
 CANNOT: The data has prices and freight but no costs, so profit can't be calculated.
@@ -225,4 +259,5 @@ def describe_coverage(con) -> str:
 def build_system_prompt(con) -> str:
     return (TEMPLATE
             .replace("{schema}", describe_schema(con))
+            .replace("{data_grain}", DATA_GRAIN)
             .replace("{coverage}", describe_coverage(con)))
