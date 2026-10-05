@@ -1,6 +1,7 @@
 """Conversational analytics agent.
 
 Per turn:
+  0. Small talk and years outside the data are answered in code (no LLM call).
   1. Resolve: turn the latest message into one standalone question.
      - After a clarifying question, a bare "yes/ok" re-asks it (no LLM call),
        and a real answer is merged using ONLY the clarifying exchange.
@@ -8,7 +9,9 @@ Per turn:
   2. Generate: the model answers the standalone question with SQL, CLARIFY,
      or CANNOT. SQL generation is stateless (no chat history).
   3. Validate + run: guardrails reject raw tables, duplicate-row results and
-     repeated clarifications; errors are fed back up to MAX_SQL_ATTEMPTS.
+     repeated clarifications; a clarifying question when the measure is
+     already given, or a refusal for something the data has, is sent back
+     once (checks.py). Errors are fed back up to MAX_SQL_ATTEMPTS.
   4. Summarize: 1-3 sentences from the result table. Every number in the
      summary must appear in the table, SQL or question, or it is rejected.
      Partial-year caveats are added by code, not by the model, and so are
@@ -19,6 +22,7 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from checks import cannot_error, clarify_error, outside_coverage, small_talk_reply
 from db import QueryError, connect, format_table, run_sql
 from llm import chat
 from prompts import build_system_prompt, relative_periods
@@ -174,12 +178,15 @@ class Agent:
 
         # Years that don't cover Jan-Dec, with a fixed caveat sentence.
         self.partial_years = {}
-        for year, first, last in self.con.execute(
+        spans = self.con.execute(
             "SELECT purchase_year, MIN(purchase_ts)::DATE, MAX(purchase_ts)::DATE "
-            "FROM sales GROUP BY 1"
-        ).fetchall():
+            "FROM sales GROUP BY 1 ORDER BY 1"
+        ).fetchall()
+        for year, first, last in spans:
             if not (first.month == 1 and first.day <= 7 and last.month == 12 and last.day >= 24):
                 self.partial_years[year] = f"{year} is a partial year (data from {first} to {last})"
+        self.years = {year for year, _, _ in spans}
+        self.first_date, self.last_date = spans[0][1], spans[-1][2]
 
         # How relative periods were resolved (from the data's latest date), as
         # (year that must appear in the SQL, note sentence).
@@ -278,7 +285,19 @@ class Agent:
         return text
 
     def ask(self, message: str) -> Reply:
+        # Greetings and thanks get a fixed reply; no SQL is generated for them.
+        small_talk = small_talk_reply(message, self.first_date, self.last_date)
+        if small_talk:
+            self._remember(message, f"CANNOT: {small_talk}")
+            return Reply("cannot", small_talk, question=message)
+
         question = self._resolve_question(message)
+
+        # Every year asked about is outside the data: say so instead of querying.
+        gap = outside_coverage(question, self.years, self.first_date, self.last_date)
+        if gap:
+            self._remember(question, f"CANNOT: {gap}")
+            return Reply("cannot", gap, question=question)
 
         # At most one clarifying question per request: if we just asked one and
         # the user's answer changed the question, the model must answer now.
@@ -288,6 +307,9 @@ class Agent:
         messages = [{"role": "system", "content": self.system},
                     {"role": "user", "content": question}]
         last_error = ""
+        # A clarifying question or refusal that the checks doubt is sent back
+        # once; if the model insists, its decision stands.
+        clarify_checked = cannot_checked = False
 
         for attempt in range(1, MAX_SQL_ATTEMPTS + 1):
             raw = chat(messages)
@@ -297,6 +319,12 @@ class Agent:
                 last_error = ("The user already answered a clarifying question. Do not ask "
                               "another one. Reply with SQL, using all available data for "
                               "anything not specified.")
+            elif kind == "clarify" and not clarify_checked and clarify_error(question):
+                clarify_checked = True
+                last_error = clarify_error(question)
+            elif kind == "cannot" and not cannot_checked and cannot_error(question):
+                cannot_checked = True
+                last_error = cannot_error(question)
             elif kind in ("clarify", "cannot"):
                 self._remember(question, f"{kind.upper()}: {payload}")
                 return Reply(kind, payload, question=question, attempts=attempt)
