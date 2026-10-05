@@ -193,6 +193,11 @@ def check_sql(sql: str, question: str = "") -> str:
     if both:
         return (f"You group by {', '.join(both)} and also aggregate it, so each group only "
                 f"repeats its own value. Remove {', '.join(both)} from GROUP BY.")
+    n = TOP_N.search(q)
+    if n and not re.search(r"\blimit\b|row_number|\brank\s*\(|dense_rank|\bqualify\b", low):
+        return (f"The question asks for the {n.group(0)}, but the query returns every row. Keep "
+                f"only the {n.group(0)}: ORDER BY the measure DESC LIMIT N, or, when breaking "
+                "down, pick them in a subquery (WHERE x IN (SELECT x ... LIMIT N)).")
     if (TOP_N.search(q) and BREAKDOWN.search(q) and low.count("select") == 1
             and re.search(r"\blimit\b", low) and "," in group_by):
         return ("LIMIT on the broken-down rows keeps the wrong rows. First pick the top N in a "

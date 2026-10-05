@@ -104,6 +104,8 @@ CHAIN_TURN4_COLUMNS = """SELECT category, customer_state,
        ROUND(SUM(CASE WHEN purchase_year = 2017 THEN revenue END), 2) AS revenue_2017,
        ROUND(SUM(CASE WHEN purchase_year = 2018 THEN revenue END), 2) AS revenue_2018
 FROM sales WHERE is_delivered AND purchase_year IN (2017, 2018)
+  AND category IN (SELECT category FROM sales WHERE purchase_year = 2017
+                   GROUP BY category ORDER BY SUM(revenue) DESC LIMIT 5)
 GROUP BY category, customer_state ORDER BY revenue_2018 DESC"""
 
 TOP3_LIMIT_WRONG = """SELECT category, purchase_quarter, ROUND(SUM(revenue), 2) AS revenue
@@ -299,6 +301,16 @@ FROM sales WHERE category = 'watches_gifts'"""
                                        "How many orders in 2017?")
     assert check_sql("SELECT COUNT(*) FROM order_facts WHERE purchase_year = 2017", "How many orders in 2017?") == ""
     assert check_sql("SELECT COUNT(*) FROM sales WHERE purchase_year = 2017", "How many items were sold in 2017?") == ""
+
+
+def test_top_n_dropped():
+    # Real failure: "top 5 ... broken down by customer state" returned every category.
+    q = "Top 5 categories by revenue in 2017, broken down by customer state"
+    no_limit = """SELECT category, s.customer_state, ROUND(SUM(s.revenue), 2) AS revenue
+FROM sales s WHERE s.purchase_year = 2017 GROUP BY category, s.customer_state ORDER BY revenue DESC"""
+    assert "returns every row" in check_sql(no_limit, q)
+    assert check_sql(CHAIN_TURN3_OK, q) == ""
+    assert check_sql(no_limit, "Revenue by category and customer state in 2017") == ""
 
 
 if __name__ == "__main__":
