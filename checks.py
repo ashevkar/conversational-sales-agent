@@ -140,7 +140,7 @@ BREAKDOWN = re.compile(r"broken down|break\w* (it |that |this )?down|"
                        r"\b(per|for each|each) (quarter|month|year|state|category)\b")
 
 
-def _main_group_by(sql: str) -> str:
+def main_group_by(sql: str) -> str:
     """The last GROUP BY clause (the outer query's, in practice), lowercased."""
     parts = re.split(r"\bgroup\s+by\b", sql, flags=re.I)
     if len(parts) < 2:
@@ -153,7 +153,7 @@ def check_sql(sql: str, question: str = "") -> str:
     used = {t.lower() for t in TABLE_REF.findall(sql)}
     q = plain(question)
     low = sql.lower()
-    group_by = _main_group_by(sql)
+    group_by = main_group_by(sql)
 
     raw = sorted(used & RAW_TABLES)
     if raw:

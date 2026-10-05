@@ -14,8 +14,10 @@ Per turn:
      repeated clarifications; a clarifying question when the measure is
      already given, or a refusal for something the data has, is sent back
      once (checks.py). Errors are fed back up to MAX_SQL_ATTEMPTS.
-  4. Summarize: 1-3 sentences from the result table. Every number in the
-     summary must appear in the table, SQL or question, or it is rejected.
+  4. Summarize (facts.py): empty and small results are summarised in code.
+     Larger ones get exact key facts (highest/lowest rows) in the prompt; every
+     number must appear in the table, SQL or question, and highest/lowest claims
+     must match the facts, or the summary is replaced by the facts.
      Partial-year caveats are added by code, not by the model, and so are
      notes saying how a relative period or a place name was interpreted.
 """
@@ -25,8 +27,10 @@ import unicodedata
 from dataclasses import dataclass
 
 from checks import (cannot_error, check_sql, clarify_error, duplicates_suspicious,
-                    outside_coverage, repeated_measures, small_talk_reply)
+                    main_group_by, outside_coverage, repeated_measures, small_talk_reply)
 from db import QueryError, connect, format_table, run_sql
+from facts import (drop_filler, facts_sentence, facts_text, key_facts, small_summary,
+                   superlatives_ok)
 from llm import chat
 from prompts import build_system_prompt, relative_periods
 
@@ -41,6 +45,7 @@ NON_ANSWERS = {"yes", "no", "ok", "okay", "sure", "y", "n", "yep", "nope", "k", 
 
 NUMBER = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
 YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+TIME_GROUPING = re.compile(r"\bpurchase_(year|quarter|month)\b")
 RELATIVE = re.compile(r"\b(?:last|previous|past)\s+(quarter|month|year)\b", re.IGNORECASE)
 
 # Brazilian states that share their name with their capital city. The prompt
@@ -248,22 +253,33 @@ class Agent:
                              f"{name} city for the city only")
         return notes
 
-    def _summarize(self, question: str, sql: str, table: str) -> str:
-        prompt = SUMMARY_PROMPT.replace("{question}", question).replace("{table}", table)
-        text = chat([{"role": "user", "content": prompt}], max_tokens=300)
+    def _summarize(self, question: str, result: dict, table: str) -> str:
+        sql, columns, rows = result["sql"], result["columns"], result["rows"]
+        text = small_summary(columns, rows)
+        if text is None:
+            facts = key_facts(columns, rows)
+            prompt = SUMMARY_PROMPT.replace("{question}", question).replace("{table}", table)
+            if facts:
+                prompt += ("\n\nKey facts, computed exactly from the full table. Use these for "
+                           "any highest or lowest claim:\n" + facts_text(facts))
+            text = drop_filler(chat([{"role": "user", "content": prompt}], max_tokens=300))
 
-        bad = untraceable_numbers(text, table, sql, question)
-        if bad:
-            retry = (prompt + "\n\nYour previous answer used numbers that are not in the "
-                     f"table: {', '.join(f'{b:,.2f}' for b in bad)}. Rewrite it using only "
-                     "numbers copied from the table.")
-            text = chat([{"role": "user", "content": retry}], max_tokens=300)
-            if untraceable_numbers(text, table, sql, question):
-                text = "Here are the results (see the table below)."
+            bad = untraceable_numbers(text, table, sql, question)
+            if bad:
+                retry = (prompt + "\n\nYour previous answer used numbers that are not in the "
+                         f"table: {', '.join(f'{b:,.2f}' for b in bad)}. Rewrite it using only "
+                         "numbers copied from the table.")
+                text = drop_filler(chat([{"role": "user", "content": retry}], max_tokens=300))
+            if untraceable_numbers(text, table, sql, question) or not superlatives_ok(text, facts):
+                text = facts_sentence(facts) or "Here are the results (see the table below)."
 
-        years_used = {int(y) for y in YEAR.findall(sql)}
         notes = self._interpretation_notes(question, sql)
-        notes += [self.partial_years[y] for y in sorted(years_used) if y in self.partial_years]
+        # Partial years: the ones the question asks about; for a trend over all
+        # the data (grouped by time, no year asked), every partial year.
+        years = {int(y) for y in YEAR.findall(question)}
+        if not years and TIME_GROUPING.search(main_group_by(sql)):
+            years = set(self.partial_years)
+        notes += [self.partial_years[y] for y in sorted(years) if y in self.partial_years]
         if notes:
             text += "\nNote: " + "; ".join(notes) + "."
         return text
@@ -340,7 +356,7 @@ class Agent:
                                           "a separate DISTINCT list of groups.")
                         else:
                             table = format_table(result)
-                            text = self._summarize(question, result["sql"], table)
+                            text = self._summarize(question, result, table)
                             self._remember(question, "Answered.")
                             return Reply("answer", text, question=question,
                                          sql=result["sql"], table=table, attempts=attempt)
