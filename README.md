@@ -13,6 +13,8 @@ You: Who are our best sellers?
 Agent: Do you mean "best" by total revenue generated, number of orders sold, or average review score?
 ```
 
+![Web UI: an answer with metric tiles and the result table](docs/screenshots/answer.png)
+
 ## Requirements
 
 - macOS or Linux, 8 GB RAM or more (16 GB recommended), about 4 GB of disk for the model.
@@ -56,6 +58,12 @@ python ui/server.py          # then open http://127.0.0.1:8000
 ```
 
 See [ui/README.md](ui/README.md) for what it shows.
+
+| Follow-up on the previous answer | Clarifying question (dark theme) |
+|---|---|
+| ![Follow-up question with the partial-year note](docs/screenshots/follow-up.png) | ![Clarifying question, then the answer](docs/screenshots/clarify-dark.png) |
+
+The screenshots are from real runs of the 4B model, not mock-ups.
 
 
 

@@ -71,3 +71,6 @@ logs/
 # ---- Eval: keep only the final run (eval/RESULTS.md summarises it) ----
 eval/results/*
 !eval/results/final.json
+
+# ---- Generated architecture diagrams (archify output) ----
+.archify/
